@@ -518,8 +518,7 @@ def updateSD(dictionary,df,isotope = "O"):
 
 from scipy.optimize import differential_evolution
 from scipy.optimize import basinhopping,minimize
-from scipy.optimize import brute
-
+from scipy.optimize import brute,least_squares,approx_fprime
 def Optimize(df,isotope="O"):
 
 	if isotope == "O":
@@ -562,10 +561,11 @@ def Optimize(df,isotope="O"):
 		SD = np.sqrt(A**2+B**2+C**2)
 		return(SD)
 
-	#def jacobian(f,x):
-		#out = approx_fprime(x,f,0.001)
+	def jacobian(f,x):
+		out = approx_fprime(x,f,0.001)
 
-		#return out
+		return out
+
 	x0 = get_initial_coeffs(0.5) 
 
 	#print(jacobian(F,x0))
@@ -598,7 +598,7 @@ def Optimize(df,isotope="O"):
 
 	#x0 = get_initial_coeffs(0.5) 
 
-	#xnew = basinhopping(F,x0 = x0)
+	#xnew = least_squares(F,x0=x0,jac=jacobian(F,x0))
 
 	print(xnew)
 	return xnew
@@ -658,6 +658,20 @@ def secondTreatment(run,df,iso = "O",option ="Plot"):
 		VSMOWCorrPlot(df,isotope = iso)
 
 	return run,df,SD_coeffs
+
+
+
+def Treat(filename):
+	runO,d18O,OCoeffs = initialTreatment(filename,iso = "O")
+	runH,d2H,HCoeffs = initialTreatment(filename,iso = "H")
+
+	runO,d18O,OCoeffs = secondTreatment(runO,d18O,iso = 'O',option =None)
+	runH,d2H,HCoeffs = secondTreatment(runH,d2H,iso = "H",option= None)
+
+	summaryO, summaryH =getMeanSDs(d18O,isotope = "O"),getMeanSDs(d2H,isotope = "H")
+
+	return summaryO,summaryH
+
 
 
 
