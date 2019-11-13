@@ -3,14 +3,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import stats
 from math import exp,log,sqrt
-from scipy.optimize import minimize
+from scipy.optimize import minimize,differential_evolution
+import os
+import csv
 
 
 class Isotope(object):
 	"""docstring for Isotope
 	A object of data"""
 	def __init__(self,filename):
+		
 		self.filename = filename
+		self.log = []
 		self.raw = None
 		self.summary = None
 		self.corr = None
@@ -22,7 +26,21 @@ class Isotope(object):
 		self.drift_params = None
 		self.VSMOW_params = None
 		self.run_overview = None
+		self.run_overview = None
+		self.defined_O = None
+		self.defined_H = None
+		self.combined_sd = None
+		self.constraint = None
+		self.HAUS1_raw_sd = None
+		self.HAUS2_raw_sd = None
+		self.TAP_raw_sd = None
+		self.HAUS1_sd = None
+		self.HAUS2_sd = None
+		self.TAP_sd = None
 
+	def Log(self):
+		for i in self.log:
+			print(i+"\n")
 	def readRaw(self):
 		df = pd.read_csv(self.filename)
 
@@ -40,9 +58,9 @@ class Isotope(object):
 		if np.any(np.isnan(self.raw["H2O_Mean"].values)) == 'True':  # checks a boolean array which evaluates to True if
 															# if one cell is empty
 		
-			print("Warning: there is at least one empty line!")
+			self.log.append("Warning: there is at least one empty line!")
 		else: 
-			print("No empty cells. Proceeding...")
+			self.log.append("No empty cells. Proceeding...")
 
 	def checkVolume(self):
 
@@ -59,7 +77,7 @@ class Isotope(object):
 
 		lines =[i for i in warning["Line"].values]
 		for i in lines:
-			print("Warning: H20 value outside bounds on line {:.0f}...".format(i))
+			self.log.append("Warning: H20 value outside bounds on line {:.0f}...".format(i))
 
 	def runSummary(self):
 
@@ -113,7 +131,7 @@ class Isotope(object):
 				self.corr =  self.raw[["Line","d(D_H)Mean","Ignore","Error Code"]]
 				self.corr = self.corr.where(self.corr["Line"]>6).dropna()
 			else:
-				print("You must choose a valid isotope to select")
+				self.log.append("You must choose a valid isotope to select")
 
 
 	def initMemCoeffs(self):
@@ -144,9 +162,19 @@ class Isotope(object):
 			"mem_coeffs":self.coeffs
 		}
 
-	def Optimize(self,isotope="O"):
 
-		print("Now running the Optimization algorithm to minimize the combined standard deviation")
+	def Optimize(self,isotope="O",method = 'default'):
+
+		self.log.append("Checking a coeffs whether a coeffs file already exists")
+
+		if os.path.isfile("ipynb/coeffs{}_{}.csv".format(isotope,self.filename[31:47]))==True:
+			self.log.append("coeffs file already exists!")
+		else:
+			self.log.append("coeffs file does not exist yet. Switch to Optimization...")
+
+
+
+		self.log.append("Now running the Optimization algorithm to minimize the combined standard deviation")
 
 		if isotope == "O":
 			col = "d(18_16)Mean"
@@ -154,7 +182,7 @@ class Isotope(object):
 			if isotope =="H":
 				col = "d(D_H)Mean"
 			else:
-				print("You must choose a valid isotope")
+				self.log.append("You must choose a valid isotope")
 
 		def getAllcoeffs(df):
 			df = df
@@ -168,6 +196,28 @@ class Isotope(object):
 			std3_0 = stds[1][-1:]
 		
 			return stds,(std1_0,std2_0,std3_0)
+
+		def F2(x):
+			vals = getAllcoeffs(self.corr)
+			val_temp=[]
+			for i,j in zip(vals[0],vals[1]):
+				temp = []
+				for k in range(0,len(x)):
+					xi = i[k]+(1-x[k])*(i[k] - j)
+					temp.append(xi)
+				
+			
+				temp = np.array(temp)	
+				val_temp.append(temp)
+			val_temp = np.array(val_temp)
+		
+			self.HAUS1_sd = np.std(val_temp[0])
+			self.HAUS2_sd = np.std(val_temp[1])
+			self.TAP_sd = np.std(val_temp[2])
+		
+			SD = (self.HAUS1_sd**2+self.HAUS2_sd**2+self.TAP_sd**2)**(0.5)
+
+			return(SD)
 
 		def F(x):
 			vals = getAllcoeffs(self.corr)
@@ -183,12 +233,12 @@ class Isotope(object):
 				val_temp.append(temp)
 			val_temp = np.array(val_temp)
 		
-			A = np.std(val_temp[0])
-			B = np.std(val_temp[1])
-			C = np.std(val_temp[2])
-			#print(vals[0][0],val_temp[0])
+			self.HAUS1_raw_sd = np.std(val_temp[0])
+			self.HAUS2_raw_sd = np.std(val_temp[1])
+			self.TAP_raw_sd = np.std(val_temp[2])
 		
-			SD = (A+B+C)**(0.5)
+			SD = (self.HAUS1_raw_sd+self.HAUS2_raw_sd+self.TAP_raw_sd)**(0.5)
+
 			return(SD)
 
 		bounds = [(0.5,1),(0.5,1),(0.5,1),(0.5,1),(0.8,1),
@@ -217,10 +267,37 @@ class Isotope(object):
 
 		x0= np.array([self.coeffs[i] for i in self.coeffs])
 
+		self.log.append("Running SQSLP algorithm")
 		xnew = minimize(F,x0 = x0,bounds = bounds,constraints = cons) # the main workhorse?
+		self.log.append("Done")
+
+
 		
 		local = dict([(i,j) for i,j in zip(range(1,len(xnew["x"])+1),xnew["x"])])
 		self.coeffs = local
+		self.combined_raw_sd = F2(x0)
+		self.combined_sd = F2(xnew["x"])
+
+		def writeCoeffsfile(coeffs,iso = isotope):
+
+			lines = [ (i+1,coeffs[i]) for i in coeffs]
+
+			with open('ipynb/coeffs{}_{}.csv'.format(iso,self.filename[31:47]), 'w') as coeffFile:
+				writer = csv.writer(coeffFile)
+
+	
+				writer.writerows(lines)
+			coeffFile.close()
+
+		writeCoeffsfile(self.coeffs)
+
+
+	def getUpdatedSD(self):
+
+		df= pd.DataFrame({"old":(self.combined_raw_sd),
+			"updated":(self.combined_sd)})
+		return df
+
 
 	def MemoryCorrection(self,isotope = "O"):
 
@@ -280,7 +357,7 @@ class Isotope(object):
 			corrected_values.append(correctLine(i))
 			
 		self.corr[col1] = corrected_values
-		print('Successfully corrected values for memory effects')
+		self.log.append('Successfully corrected values for memory effects')
 		self.memory = self.corr[["Line",col2,col1,"Error Code"]]
 
 	def OLSR(self,x,y,lims,ax=None):
@@ -291,7 +368,7 @@ class Isotope(object):
 		return (ax,(slope,intercept))
 
 	def memCorrPlot(self,isotope= "O"):
-		print("Plotting the results of memory correction")
+		self.log.append("Plotting the results of memory correction")
 
 		if isotope == "O":
 			col1 = "d(18_16)Mean"
@@ -344,39 +421,33 @@ class Isotope(object):
 		plt.show()
 
 	def driftCorrect(self,isotope = "O"):
-		self.drift = self.memory
+		self.drift = self.memory.copy()
 
 		def getDriftcorrection(df,isotope = "O"):
 
 			if isotope == "O":
-				isotope = "d(18_16)mem_corrected"
+				name = "d(18_16)mem_corrected"
 			else :
-				isotope = "d(D_H)mem_corrected"
+				name = "d(D_H)mem_corrected"
 			x = df.loc['TAP']['Line']
-			y = df.loc['TAP'][isotope]
+			y = df.loc['TAP'][name]
 
 			slope, intercept, r_value, p_value, std_err = stats.linregress(x,y)
 
-			self.drift_params = {'slope':slope,'intercept':intercept}
+			return  {'slope':slope,'intercept':intercept}
 		
+		self.drift_params = getDriftcorrection(self.drift,isotope)
+
+		df = self.drift
+
 		if isotope == "O":
-			col1 = "d(18_16)mem_corrected"
-			col2 = "d(18_16)drift_corrected"
+			self.drift["d(18_16)drift_corrected"] = self.drift["d(18_16)mem_corrected"]-self.drift["Line"]*self.drift_params["slope"]
 		else :
-			col1 = "d(D_H)mem_corrected"
-			col2 = "d(D_H)drift_corrected"
+			self.drift["d(D_H)drift_corrected"] = self.drift["d(D_H)mem_corrected"]-self.drift["Line"]*self.drift_params["slope"]
 
-		getDriftcorrection(self.drift,isotope)
 
-		params = self.drift_params
-
-		results = []
-		for i,j in zip(self.drift[col1].values,self.drift["Line"].values):
-			results.append(i-j*params["slope"])
-
-		self.drift[col2] = results
 		
-		print("Successfully corrected for drift")
+		self.log.append("Successfully corrected for drift")
 
 	def driftCorrPlot(self,isotope = "O"):
 
@@ -422,7 +493,7 @@ class Isotope(object):
 		plt.show()
 
 	def VSMOWcorrect(self,isotope = "O"):
-		self.vsmow = self.drift
+		self.vsmow = self.drift.copy()
 
 		if isotope == "O":
 			col1="d(18_16)vsmow_corrected"
@@ -436,22 +507,30 @@ class Isotope(object):
 		def normToVSMOW(df,isotope = "O"):
 			if isotope == "O":
 				col = "d(18_16)drift_corrected"
-				defined = {"HAUS1":0.6,
+				self.defined_O = {"HAUS1":0.6,
 				   "HAUS2":-29.88,
 				   "TAP":-13.4}
+				xhaus1= df.loc["HAUS1"][col].values
+				xhaus2= df.loc["HAUS2"][col].values
+				xtap = df.loc["TAP"].loc["Standard"][col].values
+				yhaus1 = np.ones(len(xhaus1))*self.defined_O["HAUS1"]
+				yhaus2 = np.ones(len(xhaus2))*self.defined_O["HAUS2"]
+				ytap = np.ones(len(xtap))*self.defined_O["TAP"]
 			else :
 				col = "d(D_H)drift_corrected"
-				defined= {"HAUS1":3.7,
+				self.defined_H= {"HAUS1":3.7,
 				   "HAUS2":-229.8,
 				   "TAP":-95.2}
+				xhaus1= df.loc["HAUS1"][col].values
+				xhaus2= df.loc["HAUS2"][col].values
+				xtap = df.loc["TAP"].loc["Standard"][col].values
+				yhaus1 = np.ones(len(xhaus1))*self.defined_H["HAUS1"]
+				yhaus2 = np.ones(len(xhaus2))*self.defined_H["HAUS2"]
+				ytap = np.ones(len(xtap))*self.defined_H["TAP"]
 
 
-			xhaus1= df.loc["HAUS1"][col].values
-			xhaus2= df.loc["HAUS2"][col].values
-			xtap = df.loc["TAP"].loc["Standard"][col].values
-			yhaus1 = np.ones(len(xhaus1))*defined["HAUS1"]
-			yhaus2 = np.ones(len(xhaus2))*defined["HAUS2"]
-			ytap = np.ones(len(xtap))*defined["TAP"]
+			
+			
 
 			yvals = []
 			xvals = []
@@ -482,7 +561,7 @@ class Isotope(object):
 			results.append(i*params["slope"]+params["intercept"])
 
 		self.vsmow[col1] = results
-		print("Sucessfully calibrated to VSMOW scale")
+		self.log.append("Sucessfully calibrated to VSMOW scale")
 
 	def VSMOWCorrPlot(self,isotope = "O"):
 
@@ -507,7 +586,7 @@ class Isotope(object):
 
 	def getMeanSDs(self,isotope = "O"):
 
-		df = self.vsmow
+		df = self.vsmow.copy()
 
 		if isotope == "O":
 			col1="d(18_16)Mean"
@@ -542,7 +621,7 @@ class Isotope(object):
 				sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 				val.append((i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 				if sd_smow >= limit:
-					print("Warning: high standard deviation on sample {}".format(i))
+					self.log.append("Warning: high standard deviation on sample {}".format(i))
 
 				
 			else:
@@ -559,7 +638,7 @@ class Isotope(object):
 					sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 					val.append((i,"_Conditioning",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 					if sd_smow >= limit:
-						print("Warning: high standard deviation on sample {}".format(i))
+						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
 
 					
@@ -572,7 +651,7 @@ class Isotope(object):
 					sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 					val.append((i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 					if sd_smow >= limit:
-						print("Warning: high standard deviation on sample {}".format(i))
+						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
 					
 					
@@ -588,7 +667,7 @@ class Isotope(object):
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 						val.append((i,"_Control {}".format(j+1),ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 					if sd_smow >= limit:
-						print("Warning: high standard deviation on sample {}".format(i))
+						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
 				else:
 					if i == 'W22':
@@ -603,7 +682,7 @@ class Isotope(object):
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 						val.append((i,"_Control W22",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 						if sd_smow >= limit:
-							print("Warning: high standard deviation on sample {}".format(i))
+							self.log.append("Warning: high standard deviation on sample {}".format(i))
 
 					
 					else:
@@ -617,88 +696,134 @@ class Isotope(object):
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 						val.append((i,dat.index.values[0][0],ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 						if sd_smow >= limit:
-							print("Warning: high standard deviation on sample {}".format(i))
+							self.log.append("Warning: high standard deviation on sample {}".format(i))
+
+		def runOverview():
+
+			self.run_overview = pd.DataFrame(val,columns=["Identifier 1",
+					"Identifier 2",
+					"{}_raw".format(general_label),
+					"stdev. raw",
+					"{} memory".format(general_label),
+					"stdev. memory",
+					"{} drift".format(general_label),
+					"stdev. drift",
+					"{} vsmow".format(general_label),
+					"{} stdev. vsmow".format(general_label),
+					"{} counts".format(general_label)]) 
+
+		runOverview()
 
 
-			
-		self.run_overview = pd.DataFrame(val,columns=["Identifier 1",
-			"Identifier 2",
-			"{}_raw".format(general_label),
-			"stdev. raw",
-			"{} memory".format(general_label),
-			"stdev. memory",
-			"{} drift".format(general_label),
-			"stdev. drift",
-			"{} vsmow".format(general_label),
-			"{} stdev. vsmow".format(general_label),
-			"{} counts".format(general_label)]) 
+	def getFinalValues(self):
 
+		return self.run_overview.iloc[:,[0,1,8,9,10]]
 
+	def checkStandards(self,isotope="O"):
 
-def initialTreatment(filename,iso = "O"):
+		df = self.getFinalValues()
+		check = df.where(df["Identifier 2"]== "_Standard").dropna()
 
-	dat = readRaw(filename)
-	checkEmpty(dat)
-	checkVolume(dat)
+		if isotope == "O":
+			self.constraint = 0.1
+			standards = self.defined_O.copy()
+		else:
+			self.constraint = 0.7
+			standards = self.defined_H.copy()
+		diffs = []
+		for i,j in zip(check.iloc[:,2],standards):
+			diff = abs(i-standards[j])
+			diffs.append(diff)
 
-	run = runSummary(dat)
+			string = "Measured:{:4.2f} --- Standard: {:4.2f} --- Difference: {:+4.2f} ".format(i,standards[j],diff)
+			self.log.append(string)
+			print(string)
 
-	df = IsotopeSelect(dat,iso)
-	df = ignoreFirstSeven(df)
-	SD_coeffs = initMemCoeffs()
-	memory_optimized = Optimize(df,isotope = iso)
-
-	SD_coeffs = updateCoeffs(SD_coeffs,df,memory_optimized)
-
-	lines = [ (i+1,SD_coeffs["mem_coeffs"][i]) for i in SD_coeffs["mem_coeffs"]]
-
-	with open('ipynb/coeffs{}.csv'.format(iso), 'w') as coeffFile:
-		writer = csv.writer(coeffFile)
-
-	
-		writer.writerows(lines)
-	coeffFile.close()
-
-	return run,df,SD_coeffs
-
-
-
-def secondTreatment(run,df,iso = "O",option ="Plot"):
-
-	SD_coeffs = readCoeffs("ipynb/coeffs{}.csv".format(iso))
-
-	df = MemoryCorrection(df,SD_coeffs,isotope = iso)
-
-	df = driftCorrect(df,isotope = iso)
-	df = VSMOWcorrect(df,isotope = iso)
-
-	sd_run = getMeanSDs(df,isotope=iso)
-
-	SD_Coeffs = updateSD(SD_coeffs,df, isotope = iso)
-
-	if option == "Plot":
-		plotSummary(run)
-		memCorrPlot(df,isotope = iso)
-		driftCorrPlot(df,isotope = iso)
-		VSMOWCorrPlot(df,isotope = iso)
-
-	return run,df,SD_coeffs,sd_run
+		diffs = np.array(diffs)
+		if np.any(diffs >self.constraint)==True:
+			self.log.append("Warning! At least one of the standards has standard deviation superior to {}".format(self.constraint))
+		else:
+			self.log.append("Standard deviations of in-house standards seem to be fine")
+		
 
 
 
-def Treat(filename):
-	print("Reading the d18O data from file {}".format(filename))
-	runO,d18O,OCoeffs = initialTreatment(filename,iso = "O")
-	print("Reading the d2H data from file {}".format(filename))
-	runH,d2H,HCoeffs = initialTreatment(filename,iso = "H")
-	
 
-	runO,d18O,OCoeffs,O18 = secondTreatment(runO,d18O,iso = 'O',option =None)
-	runH,d2H,HCoeffs,D = secondTreatment(runH,d2H,iso = "H",option= None)
 
-	O18 = O18[["Identifier 1","Identifier 2","d18O vsmow","d18O stdev. vsmow","d18O counts"]]
-	D = D[["Identifier 1","Identifier 2","d2H vsmow","d2H stdev. vsmow","d2H counts"]]
 
-	full_summary = pd.merge(O18,D,on =["Identifier 1","Identifier 2"])
+def Run(iso,filename):
 
-	return full_summary
+	RUN = Isotope(filename)
+	RUN.readRaw()
+	RUN.checkEmpty()
+	RUN.checkVolume()
+	RUN.runSummary()
+	RUN.IsotopeSelect(iso)
+	RUN.initMemCoeffs()
+	RUN.Optimize(iso,method = 'default')
+	RUN.MemoryCorrection(iso)
+	RUN.driftCorrect(iso)
+	RUN.VSMOWcorrect(iso)
+	RUN.getMeanSDs(iso)
+	RUN.checkStandards(iso)
+
+	return RUN
+
+def FullRun(filename):
+
+	print("Running the corrections for Oxygen \n ... \n ...")
+	X = Run("O",filename)
+	print('Done! \n ... \n ...\n ... \n ...')
+
+	print("Running the corrections for Deuterium \n ... \n ...")
+	Y =Run("H",filename)
+	print('Done!')
+
+	return X,Y
+
+def Merge(IsoO,IsoH):
+
+	dfO = IsoO.getFinalValues()
+	dfH = IsoH.getFinalValues()
+
+	df = pd.merge(dfO,dfH, on = ["Identifier 1","Identifier 2"])
+
+	return df
+
+def OverviewPlot(IsoO,IsoH):
+
+	merged = Merge(IsoO,IsoH)[0:19]
+
+	fig,ax = plt.subplots()
+	xi = merged["d18O vsmow"]
+	yi = merged["d2H vsmow"]
+	xi_err = merged["d18O stdev. vsmow"]
+	yi_err = merged["d2H stdev. vsmow"]
+	ax.plot(xi,yi,'o',label="results")
+	ax.errorbar(xi,yi,yerr = yi_err  ,xerr= xi_err,
+			marker = '.',
+			markersize = 0,
+			lw = 0,
+			elinewidth = 1,
+			ecolor = 'black',label="error")
+
+	x = np.arange(ax.get_xlim()[0]-1,ax.get_xlim()[1]+1,0.1)
+	ax.set_xlim(ax.get_xlim()[0],ax.get_xlim()[1])
+	ax.set(xlabel="$\delta^{18}$O [‰] (VSMOW)",ylabel="$\delta^{2}$H [‰] (VSMOW)")
+	ax.plot(x,x*8+10,label='GMWL')
+	ax.fill_between(x,x*8+2,x*8+18,alpha = 0.5,color = "orange")
+
+	ax.legend()
+	ax.grid()
+
+	ax.tick_params(direction='in',top=True,right=True)
+	plt.title("Dual Isotope space plot of Results")
+	plt.tight_layout()
+	plt.show()
+
+def DatatoCSV(IsoO,IsoH):
+	merged = Merge(IsoO,IsoH)[0:19]
+	merged.to_csv('ipynb/data.csv')
+
+
+
