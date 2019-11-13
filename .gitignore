@@ -4,3 +4,13 @@
 
 # Do not track python caches
 *.pyc
+
+# Do not track produced figures
+
+*pdf
+
+*jpeg
+
+*jpg
+
+*png
