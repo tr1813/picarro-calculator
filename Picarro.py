@@ -14,6 +14,7 @@ class Isotope(object):
 	def __init__(self,filename):
 		
 		self.filename = filename
+		self.dir = "../../Picarro_data/PICARRO_run_"+self.filename[31:46]
 		self.log = []
 		self.raw = None
 		self.summary = None
@@ -126,10 +127,12 @@ class Isotope(object):
 		if isotope == "O":
 			self.corr =  self.raw[["Line","d(18_16)Mean","Ignore","Error Code"]]
 			self.corr = self.corr.where(self.corr["Line"]>6).dropna()
+			self.constraint = 0.1
 		else:
 			if isotope == "H":
 				self.corr =  self.raw[["Line","d(D_H)Mean","Ignore","Error Code"]]
 				self.corr = self.corr.where(self.corr["Line"]>6).dropna()
+				self.constraint = 0.8
 			else:
 				self.log.append("You must choose a valid isotope to select")
 
@@ -167,8 +170,11 @@ class Isotope(object):
 
 		self.log.append("Checking a coeffs whether a coeffs file already exists")
 
-		if os.path.isfile("ipynb/coeffs{}_{}.csv".format(isotope,self.filename[31:47]))==True:
-			self.log.append("coeffs file already exists!")
+		if os.path.isdir(self.dir)==False:
+			print('creating a directory to store the data')
+			os.makedirs(self.dir)
+			if os.path.isfile(self.dir+"/coeffs{}_{}.csv".format(isotope,self.filename[31:46]))==True:
+				self.log.append("coeffs file already exists!")
 		else:
 			self.log.append("coeffs file does not exist yet. Switch to Optimization...")
 
@@ -282,7 +288,7 @@ class Isotope(object):
 
 			lines = [ (i+1,coeffs[i]) for i in coeffs]
 
-			with open('ipynb/coeffs{}_{}.csv'.format(iso,self.filename[31:47]), 'w') as coeffFile:
+			with open(self.dir+'/coeffs{}_{}.csv'.format(iso,self.filename[31:46]), 'w') as coeffFile:
 				writer = csv.writer(coeffFile)
 
 	
@@ -609,6 +615,57 @@ class Isotope(object):
 		def getSampleNames(df):
 			return df.index.levels[0].values  
 		
+		def runCheck2(df1,col4):
+			df = df1.copy()
+			
+			df = df[col4]
+			
+			stds = [] 
+			stds.append((df.std(),"no missing measurements"))
+			
+			for i in range(len(df)):
+				statement1 = "missing measurement {}".format((i)%4)
+				stds.append((df.iloc[[i,(i+1)%4,(i+2)%4]].std(),statement1))
+				statement2 ="missing measurements {} and {}".format((i)%4,(i+1)%4)
+				stds.append((df.iloc[[i,(i+1)%4]].std(),statement2))
+				if i <2:
+					statement3 ="missing measurements {} and {}".format((i-1)%4+1,(i+1)%4+1)
+					stds.append((df.iloc[[i,(i+2)%4]].std(),statement3))
+
+			def checks(mylist):
+				
+				if mylist[0][0]<self.constraint:
+					print("Standard dev is good")
+				else:
+					conds = [mylist[1][0],mylist[4][0],mylist[7][0],mylist[9][0]]
+					if min(conds) < self.constraint:
+						val = ((conds.index(min(conds))-1)%4)+1
+						print("Standard dev too high get rid of measurement {}".format(val))
+						df1.drop(index = val ,level = 1, inplace = True)
+						
+					else:
+						conds2 = [(mylist[2][0],2),(mylist[3][0],3),(mylist[5][0],5),(mylist[6][0],6),(mylist[8][0],8),(mylist[10][0],10)]
+						conds_temp = [i[0] for i in conds2]
+						if min(conds_temp) < self.constraint:
+
+							
+
+							value= conds_temp.index(min(conds_temp))
+							print(value)
+							new_val = conds2[value][1]
+							print(stds[new_val][1])
+							print("get rid of measurements {}".format(stds[new_val][1][-8:]))
+							vals_to_drop = [stds[new_val][1][-7],stds[new_val][1][-1]]
+							print(vals_to_drop)
+							df1.drop(index = (int(vals_to_drop[0])-1)%4 ,level = 1, inplace = True)
+							df1.drop(index = (int(vals_to_drop[1])-1)%4 ,level = 1, inplace = True)
+						else:
+							print("too high std. deviation")
+
+			checks(stds)
+			return df1
+
+
 		for i in getSampleNames(self.vsmow):
 			if (i == "HAUS1") or (i=="HAUS2"):
 				dat = df.where(df["Error Code"] == 0)
@@ -688,6 +745,7 @@ class Isotope(object):
 					else:
 						dat = df.where(df["Error Code"] == 0)
 						dat = dat.loc[i]
+						dat = runCheck2(dat,col4)
 						ISOmean = dat[col1]
 						ISOmem_corr = dat[col2]
 						ISOdrift_corr = dat[col3]
@@ -728,7 +786,7 @@ class Isotope(object):
 			self.constraint = 0.1
 			standards = self.defined_O.copy()
 		else:
-			self.constraint = 0.7
+			self.constraint = 0.8
 			standards = self.defined_H.copy()
 		diffs = []
 		for i,j in zip(check.iloc[:,2],standards):
@@ -744,6 +802,10 @@ class Isotope(object):
 			self.log.append("Warning! At least one of the standards has standard deviation superior to {}".format(self.constraint))
 		else:
 			self.log.append("Standard deviations of in-house standards seem to be fine")
+
+	def getDir(self):
+
+		return self.dir
 
 
 
@@ -818,9 +880,54 @@ def OverviewPlot(IsoO,IsoH):
 	plt.tight_layout()
 	plt.show()
 
-def DatatoCSV(IsoO,IsoH):
+
+
+
+def OverviewDatatoCSV(IsoO,IsoH):
+	dir_path = IsoO.getDir()
 	merged = Merge(IsoO,IsoH)[0:19]
-	merged.to_csv('ipynb/data.csv')
+	summary = IsoO.summary
+	log = IsoO.log
+
+	def writelog():
+		f = open(dir_path+'/log.txt','w')
+
+		for line in log:
+			f.write(line+'\n')
+
+		f.close()
+
+	if os.path.isdir(dir_path) == False:
+		print("Directory does not yet exist.")
+		
+		os.makedirs(dir_path)
+		
+		print("Writing file")
+		
+		merged.to_csv(dir_path+'/data.csv')
+		
+		summary.to_csv(dir_path+'/run_summary.csv')
+		writelog()
+
+
+
+	else:
+		print("Directory already exists")
+		if os.path.isfile(dir_path+'/data.csv') == True:
+			print("Summary data file already exists!")
+			writelog()
+		else:
+			print("writing data file")
+			merged.to_csv(dir_path+'/data.csv')
+			if os.path.isfile(dir_path+'/run_summary.csv'):
+				print("Run summary already exists")
+			else:
+				print("writing run summary file")
+				summary.to_csv(dir_path+'/run_summary.csv')
+				writelog()
+
+
+	
 
 
 
