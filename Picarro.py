@@ -744,9 +744,6 @@ class Isotope(object):
 			self.log.append("Warning! At least one of the standards has standard deviation superior to {}".format(self.constraint))
 		else:
 			self.log.append("Standard deviations of in-house standards seem to be fine")
-		
-
-
 
 
 
