@@ -83,11 +83,11 @@ class Isotope(object):
 	def runSummary(self):
 
 		self.summary = self.raw[["Line",
-					   "H2O_Mean",
-					   "Good",
-					   "Error Code",
-					   "d(18_16)Mean",
-					   "d(D_H)Mean"]]
+						"H2O_Mean",
+						"Good",
+						"Error Code",
+						"d(18_16)Mean",
+						"d(D_H)Mean"]]
 		
 		self.summary = self.summary.sort_index(axis=0)
 
@@ -514,8 +514,8 @@ class Isotope(object):
 			if isotope == "O":
 				col = "d(18_16)drift_corrected"
 				self.defined_O = {"HAUS1":0.6,
-				   "HAUS2":-29.88,
-				   "TAP":-13.4}
+					"HAUS2":-29.88,
+					"TAP":-13.4}
 				xhaus1= df.loc["HAUS1"][col].values
 				xhaus2= df.loc["HAUS2"][col].values
 				xtap = df.loc["TAP"].loc["Standard"][col].values
@@ -525,18 +525,14 @@ class Isotope(object):
 			else :
 				col = "d(D_H)drift_corrected"
 				self.defined_H= {"HAUS1":3.7,
-				   "HAUS2":-229.8,
-				   "TAP":-95.2}
+					"HAUS2":-229.8,
+					"TAP":-95.2}
 				xhaus1= df.loc["HAUS1"][col].values
 				xhaus2= df.loc["HAUS2"][col].values
 				xtap = df.loc["TAP"].loc["Standard"][col].values
 				yhaus1 = np.ones(len(xhaus1))*self.defined_H["HAUS1"]
 				yhaus2 = np.ones(len(xhaus2))*self.defined_H["HAUS2"]
 				ytap = np.ones(len(xtap))*self.defined_H["TAP"]
-
-
-			
-			
 
 			yvals = []
 			xvals = []
@@ -758,7 +754,7 @@ class Isotope(object):
 
 		def runOverview():
 
-			self.run_overview = pd.DataFrame(val,columns=["Identifier 1",
+			df = pd.DataFrame(val,columns=["Identifier 1",
 					"Identifier 2",
 					"{}_raw".format(general_label),
 					"stdev. raw",
@@ -769,18 +765,23 @@ class Isotope(object):
 					"{} vsmow".format(general_label),
 					"{} stdev. vsmow".format(general_label),
 					"{} counts".format(general_label)]) 
+			df.set_index(['Identifier 1', 'Identifier 2'], inplace = True)
+
+			df.sort_index(axis = 0, level =1, inplace = True)
+
+			self.run_overview = df
+
 
 		runOverview()
 
-
 	def getFinalValues(self):
 
-		return self.run_overview.iloc[:,[0,1,8,9,10]]
+		return self.run_overview.iloc[:,[6,7,8]]
 
 	def checkStandards(self,isotope="O"):
 
 		df = self.getFinalValues()
-		check = df.where(df["Identifier 2"]== "_Standard").dropna()
+		check = df.iloc[-3:]
 
 		if isotope == "O":
 			self.constraint = 0.1
@@ -789,7 +790,7 @@ class Isotope(object):
 			self.constraint = 0.8
 			standards = self.defined_H.copy()
 		diffs = []
-		for i,j in zip(check.iloc[:,2],standards):
+		for i,j in zip(check.iloc[:,0],standards):
 			diff = abs(i-standards[j])
 			diffs.append(diff)
 
@@ -807,7 +808,34 @@ class Isotope(object):
 
 		return self.dir
 
+class Merged(object):
+	"""docstring for Isotope
+	A object of data"""
+	def __init__(self,O18,D):
 
+		self.merge = None
+		self.O18 = O18
+		self.D = D
+
+	def setMerge(self):
+
+		self.merge = Merge(self.O18,self.D)
+
+	def Plot(self):
+
+		OverviewPlot(self.O18,self.D)
+
+	def suggestedReruns(self):
+
+		def checkCount(df):
+
+			df1 = df.where(df["d18O counts"]<2 or df["d2H counts"] <2).dropna().copy()
+
+
+			return df1
+
+		bad = checkCount(self.merge)
+		print(bad.head())
 
 
 def Run(iso,filename):
@@ -827,6 +855,8 @@ def Run(iso,filename):
 	RUN.checkStandards(iso)
 
 	return RUN
+
+
 
 def FullRun(filename):
 
@@ -915,6 +945,13 @@ def OverviewDatatoCSV(IsoO,IsoH):
 		print("Directory already exists")
 		if os.path.isfile(dir_path+'/data.csv') == True:
 			print("Summary data file already exists!")
+			if os.path.isfile(dir_path+'/run_summary.csv'):
+				print("Run summary already exists")
+			else:
+				print("writing run summary file")
+				summary.to_csv(dir_path+'/run_summary.csv')
+				writelog()
+
 			writelog()
 		else:
 			print("writing data file")
@@ -925,9 +962,5 @@ def OverviewDatatoCSV(IsoO,IsoH):
 				print("writing run summary file")
 				summary.to_csv(dir_path+'/run_summary.csv')
 				writelog()
-
-
-	
-
 
 
