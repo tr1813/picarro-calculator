@@ -633,11 +633,13 @@ class Isotope(object):
 			def checks(mylist):
 				
 				if mylist[0][0]<self.constraint:
+					self.log.append("Standard dev is good")
 					print("Standard dev is good")
 				else:
 					conds = [mylist[1][0],mylist[4][0],mylist[7][0],mylist[9][0]]
 					if min(conds) < self.constraint:
 						val = ((conds.index(min(conds))-1)%4)+1
+						self.log.append("Standard dev too high get rid of measurement {}".format(val))
 						print("Standard dev too high get rid of measurement {}".format(val))
 						df1.drop(index = val ,level = 1, inplace = True)
 						
@@ -649,16 +651,15 @@ class Isotope(object):
 							
 
 							value= conds_temp.index(min(conds_temp))
-							print(value)
 							new_val = conds2[value][1]
-							print(stds[new_val][1])
 							print("get rid of measurements {}".format(stds[new_val][1][-8:]))
+							self.log.append("get rid of measurements {}".format(stds[new_val][1][-8:]))
 							vals_to_drop = [stds[new_val][1][-7],stds[new_val][1][-1]]
-							print(vals_to_drop)
 							df1.drop(index = (int(vals_to_drop[0])-1)%4 ,level = 1, inplace = True)
 							df1.drop(index = (int(vals_to_drop[1])-1)%4 ,level = 1, inplace = True)
 						else:
 							print("too high std. deviation")
+							self.log.append("too high std. deviation")
 
 			checks(stds)
 			return df1
@@ -726,7 +727,6 @@ class Isotope(object):
 
 				else:
 					if i == 'W22':
-
 						dat = df.where(df["Error Code"] == 0)
 						dat = dat.loc[i]
 						ISOmean = dat.loc["Control W22"][col1]
@@ -742,6 +742,8 @@ class Isotope(object):
 					
 					else:
 						dat = df.where(df["Error Code"] == 0)
+						print("Checking: {} ...".format(i))
+						self.log.append("Checking: {} ...".format(i))
 						dat = dat.loc[i]
 						dat = runCheck2(dat,col4)
 						ISOmean = dat[col1]
@@ -819,6 +821,11 @@ class Merged(object):
 		self.O18 = O18
 		self.D = D
 		self.coeffs = None
+		self.non_replicate = None
+		self.non_triplicate = None
+		self.non_perfect = None
+		self.high_std = None
+		self.gmwl = None
 
 	def setMerge(self):
 
@@ -826,6 +833,7 @@ class Merged(object):
 
 	def setCoeffs(self):
 		d = {"O":[i for i in self.O18.coeffs.values()],"H":[j for j in self.D.coeffs.values()]}
+
 		df = pd.DataFrame(d,index = np.arange(1,11,1))
 		self.coeffs = df
 
@@ -836,17 +844,80 @@ class Merged(object):
 
 	def suggestedReruns(self):
 
-		def checkCount(df):
+		def CheckGMWL(df):
 
-			df1 = df.where(df["d18O counts"]<2 or df["d2H counts"] <2).dropna().copy()
+			cond1 = df["d2H vsmow"] - df["d18O vsmow"]*8 - 18 < 0
+			cond2 = df["d2H vsmow"] - df["d18O vsmow"]*8 - 2 > 0
+
+			result = []
+			for i,j in zip(cond1.values,cond2.values):
+				k = i and j == True
+				if k == True:
+					g = "inside"
+					result.append(g)
+				else:
+					g = 'outside'
+					result.append(g)
+
+			df["inside GMWL"] = result
+
+			return df.where(df["inside GMWL"] == 'outside').dropna()
+
+			
+
+		def checkSTDv(df):
+			df1 = df.where(df["d18O stdev. vsmow"]>0.1)
+			df2 = df.where(df["d2H stdev. vsmow"]>0.8)
+
+			df3 = df1.dropna().append(df2.dropna()).drop_duplicates()
+
+			return df3
 
 
-			return df1
+		def checkCount(df,thresh):
 
-		bad = checkCount(self.merge)
-		print(bad.head())
+			df1 = df.where(df["d18O counts"]<=2)
+			df2 = df.where(df["d2H counts"]<=2)
+			df3 = df1.dropna().append(df2.dropna()).drop_duplicates()
 
+			return df3
 
+		self.non_triplicate = checkCount(self.merge,2)
+		self.non_perfect = checkCount(self.merge,3)
+
+		self.high_std = checkSTDv(self.merge)
+		self.gmwl = CheckGMWL(self.merge)
+		
+		print("Checking for triplicates...")
+		
+		if len(self.non_triplicate) > 0:
+			
+			print("Some samples were not triplicated")
+			print(self.non_triplicate["d18O vsmow"])
+			print('\n')
+	
+		else:
+
+			print("This was a good run")
+
+		print("Checking for high standard deviations ...")
+		if len(self.high_std)  > 0:
+				print("Suggested reruns for following samples, which had high standard deviations")
+				print(self.high_std["d18O vsmow"])
+				print('\n')
+				
+		else:
+			print("This was a good run")
+
+		print("Checking for samples lying outside of the GWML ...")
+		if len(self.gmwl)  > 0:
+				print("Suggested reruns for following samples, which were outside of the GMWL")
+				print(self.gmwl["d18O vsmow"])
+				print('\n')
+		else:
+			print("Nothing to report")
+
+			
 def Run(iso,filename):
 
 	RUN = Isotope(filename)
