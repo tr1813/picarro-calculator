@@ -243,7 +243,7 @@ class Isotope(object):
 			self.HAUS2_raw_sd = np.std(val_temp[1])
 			self.TAP_raw_sd = np.std(val_temp[2])
 		
-			SD = (self.HAUS1_raw_sd+self.HAUS2_raw_sd+self.TAP_raw_sd)**(0.5)
+			SD = (self.HAUS1_raw_sd**(0.5)+self.HAUS2_raw_sd**(0.5)+self.TAP_raw_sd**(0.5))**(0.5)
 
 			return(SD)
 
@@ -460,11 +460,11 @@ class Isotope(object):
 		if isotope =="O":
 			col = 'd(18_16)mem_corrected'
 			col2 = 'd(18_16)drift_corrected'
-			posxy = (20,-16.4)
+			posxy = (60,-16.5)
 		else:
 			col = 'd(D_H)mem_corrected'
 			col2 = 'd(D_H)drift_corrected'
-			posxy = (20,-90)
+			posxy = (60,-93)
 
 		x = self.drift.loc['TAP']['Line']
 		y1 = self.drift.loc['TAP'][col]
@@ -480,14 +480,14 @@ class Isotope(object):
 				y1,
 				'o',
 				color = 'black',
-				markersize = 3, 
+				markersize = 5, 
 				markerfacecolor='white',label =" no drift correction")
 
 		ax.plot(x,
 				y2,
 				'o',
 				color = 'black',
-				markersize = 3, 
+				markersize = 5, 
 				markerfacecolor='black',label="drift corrected")
 
 		ax.legend()
@@ -569,13 +569,15 @@ class Isotope(object):
 
 		if isotope=="O":
 			posxy = (-15,-25)
+			limx = np.arange(-40,10,1)
 		else:
 			posxy = (-60,-200)
+			limx = np.arange(-250,50,1)
 
 		params = self.VSMOW_params
 
 		fig, ax = plt.subplots(figsize= (6,4))
-		xi = np.arange(-250,50,1)
+		xi = limx
 
 		ax.plot(params["xvals"],params["yvals"],'o',color = 'black',markerfacecolor='w')
 		ax.plot(xi,xi*params["slope"]+params["intercept"], color = 'black')
@@ -816,10 +818,17 @@ class Merged(object):
 		self.merge = None
 		self.O18 = O18
 		self.D = D
+		self.coeffs = None
 
 	def setMerge(self):
 
 		self.merge = Merge(self.O18,self.D)
+
+	def setCoeffs(self):
+		d = {"O":[i for i in self.O18.coeffs.values()],"H":[j for j in self.D.coeffs.values()]}
+		df = pd.DataFrame(d,index = np.arange(1,11,1))
+		self.coeffs = df
+
 
 	def Plot(self):
 
@@ -868,7 +877,14 @@ def FullRun(filename):
 	Y =Run("H",filename)
 	print('Done!')
 
-	return X,Y
+	OverviewDatatoCSV(X,Y)
+	print("now merging the O and H isotope data \n ... \n ...")
+
+	Z = Merged(X,Y)
+	Z.setMerge()
+	Z.setCoeffs()
+
+	return Z
 
 def Merge(IsoO,IsoH):
 
@@ -909,8 +925,6 @@ def OverviewPlot(IsoO,IsoH):
 	plt.title("Dual Isotope space plot of Results")
 	plt.tight_layout()
 	plt.show()
-
-
 
 
 def OverviewDatatoCSV(IsoO,IsoH):
