@@ -1,16 +1,18 @@
-#Do not track notebook changes
+# Created by https://www.gitignore.io/api/jupyternotebooks
+# Edit at https://www.gitignore.io/?templates=jupyternotebooks
 
-*.ipynb
+### JupyterNotebooks ###
+# gitignore template for Jupyter Notebooks
+# website: http://jupyter.org/
 
-# Do not track python caches
-*.pyc
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
 
-# Do not track produced figures
+# IPython
+profile_default/
+ipython_config.py
 
-*pdf
+# Remove previous ipynb_checkpoints
+#   git rm -r .ipynb_checkpoints/
 
-*jpeg
-
-*jpg
-
-*png
+# End of https://www.gitignore.io/api/jupyternotebooks
