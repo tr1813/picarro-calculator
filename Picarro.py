@@ -899,6 +899,7 @@ class Merged(object):
 		else:
 
 			print("This was a good run")
+			print('\n')
 
 		print("Checking for high standard deviations ...")
 		if len(self.high_std)  > 0:
@@ -908,6 +909,7 @@ class Merged(object):
 				
 		else:
 			print("This was a good run")
+			print('\n')
 
 		print("Checking for samples lying outside of the GWML ...")
 		if len(self.gmwl)  > 0:
@@ -916,6 +918,7 @@ class Merged(object):
 				print('\n')
 		else:
 			print("Nothing to report")
+			print('\n')
 
 			
 def Run(iso,filename):
