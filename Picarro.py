@@ -1,3 +1,8 @@
+#!/usr/bin/python
+# -*- coding: latin-1 -*-
+
+import sys; sys.path
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -435,10 +440,12 @@ class Isotope(object):
 				name = "d(18_16)mem_corrected"
 			else :
 				name = "d(D_H)mem_corrected"
-			x = df.loc['TAP']['Line']
-			y = df.loc['TAP'][name]
+			xy1 = df.loc['TAP',['Line',name]][0:4]
+			xy2 = df.loc['TAP',['Line',name]][10:]
 
-			slope, intercept, r_value, p_value, std_err = stats.linregress(x,y)
+			xy = xy1.append(xy2)
+
+			slope, intercept, r_value, p_value, std_err = stats.linregress(xy["Line"],xy[name])
 
 			return  {'slope':slope,'intercept':intercept}
 		
@@ -466,25 +473,24 @@ class Isotope(object):
 			col2 = 'd(D_H)drift_corrected'
 			posxy = (60,-93)
 
-		x = self.drift.loc['TAP']['Line']
-		y1 = self.drift.loc['TAP'][col]
-		y2 = self.drift.loc['TAP'][col2]
+		xy1 = self.drift.loc['TAP',['Line',col,col2]][0:4]
+		xy2 = self.drift.loc['TAP',['Line',col,col2]][10:]
+		xy = xy1.append(xy2)
+
 
 		fig,ax = plt.subplots()
 
-		self.OLSR(x,y1,(0,132),ax)[0]
+		self.OLSR(xy["Line"],xy[col],(0,132),ax)[0]
 
-		params = self.OLSR(x,y1,(0,132),ax)[1]
+		params = self.OLSR(xy["Line"],xy[col],(0,132),ax)[1]
 
-		ax.plot(x,
-				y1,
+		ax.plot(xy["Line"],xy[col],
 				'o',
 				color = 'black',
 				markersize = 5, 
 				markerfacecolor='white',label =" no drift correction")
 
-		ax.plot(x,
-				y2,
+		ax.plot(xy["Line"],xy[col2],
 				'o',
 				color = 'black',
 				markersize = 5, 
