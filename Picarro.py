@@ -11,6 +11,8 @@ from math import exp,log,sqrt
 from scipy.optimize import minimize,differential_evolution
 import os
 import csv
+import datetime
+import time
 
 
 class Isotope(object):
@@ -85,6 +87,19 @@ class Isotope(object):
 		for i in lines:
 			self.log.append("Warning: H20 value outside bounds on line {:.0f}...".format(i))
 
+
+	def setPrimaryKey(self):
+		#def f(timecode):
+			#t = datetime.datetime.strptime(timecode,'   %Y/%m/%d %H:%M:%S')
+			#return int(time.mktime(t.timetuple()))
+		
+		#pk = [int(f(i)) for i in self.raw["Time Code"].values]
+		pk = [int(str(i)[5:]) for i in self.raw["Analysis"].values]
+
+		self.raw["key"] = pk
+
+
+
 	def runSummary(self):
 
 		self.summary = self.raw[["Line",
@@ -129,13 +144,16 @@ class Isotope(object):
 		plt.show()
 
 	def IsotopeSelect(self,isotope="O"):
+
+
+
 		if isotope == "O":
-			self.corr =  self.raw[["Line","d(18_16)Mean","Ignore","Error Code"]]
+			self.corr =  self.raw[["key","Line","d(18_16)Mean","Ignore","Error Code"]]
 			self.corr = self.corr.where(self.corr["Line"]>6).dropna()
 			self.constraint = 0.1
 		else:
 			if isotope == "H":
-				self.corr =  self.raw[["Line","d(D_H)Mean","Ignore","Error Code"]]
+				self.corr =  self.raw[["key","Line","d(D_H)Mean","Ignore","Error Code"]]
 				self.corr = self.corr.where(self.corr["Line"]>6).dropna()
 				self.constraint = 0.8
 			else:
@@ -369,7 +387,7 @@ class Isotope(object):
 			
 		self.corr[col1] = corrected_values
 		self.log.append('Successfully corrected values for memory effects')
-		self.memory = self.corr[["Line",col2,col1,"Error Code"]]
+		self.memory = self.corr[["key","Line",col2,col1,"Error Code"]]
 
 	def OLSR(self,x,y,lims,ax=None):
 		xi=np.arange(lims[0],lims[1],0.25)
@@ -675,13 +693,14 @@ class Isotope(object):
 			if (i == "HAUS1") or (i=="HAUS2"):
 				dat = df.where(df["Error Code"] == 0)
 				dat = dat.loc[[i,'Standard']]
+				key = max(dat.iloc[0:10]["key"])
 				ISOmean = dat.iloc[0:10][col1]
 				ISOmem_corr = dat.iloc[0:10][col2]
 				ISOdrift_corr = dat.iloc[0:10][col3]
 				ISOvsmow_corr = dat.iloc[0:10][col4]
 				count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 				sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-				val.append((i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+				val.append((key,i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 				if sd_smow >= limit:
 					self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -690,7 +709,7 @@ class Isotope(object):
 				if i == "TAP":
 					dat = df.where(df["Error Code"] == 0)
 					dat = dat.loc[i]
-
+					key = max(dat.loc["Conditioning"]["key"])
 					ISO = dat.loc["Conditioning"][col1]
 					ISOmean = dat.loc["Conditioning"][col1]
 					ISOmem_corr = dat.loc["Conditioning"][col2]
@@ -698,12 +717,12 @@ class Isotope(object):
 					ISOvsmow_corr = dat.loc["Conditioning"][col4]
 					count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 					sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-					val.append((i,"_Conditioning",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+					val.append((key,i,"_Conditioning",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 					if sd_smow >= limit:
 						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
 
-					
+					key = max(dat.loc["Standard"]["key"])
 					ISO = dat.loc["Standard"][col1]
 					ISOmean = dat.loc["Standard"][col1]
 					ISOmem_corr = dat.loc["Standard"][col2]
@@ -711,7 +730,7 @@ class Isotope(object):
 					ISOvsmow_corr = dat.loc["Standard"][col4]
 					count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 					sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-					val.append((i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+					val.append((key,i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 					if sd_smow >= limit:
 						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -720,14 +739,17 @@ class Isotope(object):
 					js = np.arange(0,3,1)
 					for j in js:
 
+						
 						ISO = dat.loc['Control'].iloc[j*4:(j+1)]
-						ISOmean = dat.loc["Control"].iloc[j*4:(j+1)*4][col1]
-						ISOmem_corr = dat.loc["Control"].iloc[j*4:(j+1)*4][col2]
-						ISOdrift_corr = dat.loc["Control"].iloc[j*4:(j+1)*4][col3]
-						ISOvsmow_corr = dat.loc["Control"].iloc[j*4:(j+1)*4][col4]
+
+						ISOmean = dat.loc["Control"].iloc[j*4:(j+1)*4-1][col1]
+						key = min(dat.loc["Control"].iloc[j*4:(j+1)*4-1]["key"])
+						ISOmem_corr = dat.loc["Control"].iloc[j*4:(j+1)*4-1][col2]
+						ISOdrift_corr = dat.loc["Control"].iloc[j*4:(j+1)*4-1][col3]
+						ISOvsmow_corr = dat.loc["Control"].iloc[j*4:(j+1)*4-1][col4]
 						count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-						val.append((i,"_Control {}".format(j+1),ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+						val.append((key,i,"_Control {}".format(j+1),ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 					if sd_smow >= limit:
 						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -735,13 +757,14 @@ class Isotope(object):
 					if i == 'W22':
 						dat = df.where(df["Error Code"] == 0)
 						dat = dat.loc[i]
+						key = max(dat.loc["Control W22"]["key"])
 						ISOmean = dat.loc["Control W22"][col1]
 						ISOmem_corr = dat.loc["Control W22"][col2]
 						ISOdrift_corr = dat.loc["Control W22"][col3]
 						ISOvsmow_corr = dat.loc["Control W22"][col4]
 						count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-						val.append((i,"_Control W22",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+						val.append((key,i,"_Control W22",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 						if sd_smow >= limit:
 							self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -752,19 +775,20 @@ class Isotope(object):
 						self.log.append("Checking: {} ...".format(i))
 						dat = dat.loc[i]
 						dat = runCheck2(dat,col4)
+						key = max(dat["key"])
 						ISOmean = dat[col1]
 						ISOmem_corr = dat[col2]
 						ISOdrift_corr = dat[col3]
 						ISOvsmow_corr = dat[col4]
 						count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-						val.append((i,dat.index.values[0][0],ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+						val.append((key,i,dat.index.values[0][0],ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
 						if sd_smow >= limit:
 							self.log.append("Warning: high standard deviation on sample {}".format(i))
 
 		def runOverview():
 
-			df = pd.DataFrame(val,columns=["Identifier 1",
+			df = pd.DataFrame(val,columns=["key","Identifier 1",
 					"Identifier 2",
 					"{}_raw".format(general_label),
 					"stdev. raw",
@@ -775,9 +799,8 @@ class Isotope(object):
 					"{} vsmow".format(general_label),
 					"{} stdev. vsmow".format(general_label),
 					"{} counts".format(general_label)]) 
-			df.set_index(['Identifier 1', 'Identifier 2'], inplace = True)
-
-			df.sort_index(axis = 0, level =1, inplace = True)
+			df.set_index('key', inplace = True)
+			df.sort_index(inplace = True)
 
 			self.run_overview = df
 
@@ -786,7 +809,7 @@ class Isotope(object):
 
 	def getFinalValues(self):
 
-		return self.run_overview.iloc[:,[6,7,8]]
+		return self.run_overview.iloc[:,[0,1,8,9,10]]
 
 	def checkStandards(self,isotope="O"):
 
@@ -933,6 +956,7 @@ def Run(iso,filename):
 	RUN.readRaw()
 	RUN.checkEmpty()
 	RUN.checkVolume()
+	RUN.setPrimaryKey()
 	RUN.runSummary()
 	RUN.IsotopeSelect(iso)
 	RUN.initMemCoeffs()
@@ -941,7 +965,7 @@ def Run(iso,filename):
 	RUN.driftCorrect(iso)
 	RUN.VSMOWcorrect(iso)
 	RUN.getMeanSDs(iso)
-	RUN.checkStandards(iso)
+	#RUN.checkStandards(iso)
 
 	return RUN
 
@@ -971,13 +995,13 @@ def Merge(IsoO,IsoH):
 	dfO = IsoO.getFinalValues()
 	dfH = IsoH.getFinalValues()
 
-	df = pd.merge(dfO,dfH, on = ["Identifier 1","Identifier 2"])
+	df = pd.merge(dfO,dfH, on = ["key","Identifier 1", "Identifier 2"])
 
 	return df
 
 def OverviewPlot(IsoO,IsoH):
 
-	merged = Merge(IsoO,IsoH)[0:19]
+	merged = Merge(IsoO,IsoH)
 
 	fig,ax = plt.subplots()
 	xi = merged["d18O vsmow"]
@@ -1009,7 +1033,7 @@ def OverviewPlot(IsoO,IsoH):
 
 def OverviewDatatoCSV(IsoO,IsoH):
 	dir_path = IsoO.getDir()
-	merged = Merge(IsoO,IsoH)[0:19]
+	merged = Merge(IsoO,IsoH)
 	summary = IsoO.summary
 	log = IsoO.log
 
