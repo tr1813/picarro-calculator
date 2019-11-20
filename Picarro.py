@@ -701,6 +701,7 @@ class Isotope(object):
 				count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 				sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 				val.append((key,i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+				print(key)
 				if sd_smow >= limit:
 					self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -718,6 +719,7 @@ class Isotope(object):
 					count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 					sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 					val.append((key,i,"_Conditioning",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+					print(key)
 					if sd_smow >= limit:
 						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -731,6 +733,7 @@ class Isotope(object):
 					count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 					sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 					val.append((key,i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+					print(key)
 					if sd_smow >= limit:
 						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -757,7 +760,7 @@ class Isotope(object):
 					if i == 'W22':
 						dat = df.where(df["Error Code"] == 0)
 						dat = dat.loc[i]
-						key = max(dat.loc["Control W22"]["key"])
+						key = dat.loc[[i,"Control W22"],"key"][0]
 						ISOmean = dat.loc["Control W22"][col1]
 						ISOmem_corr = dat.loc["Control W22"][col2]
 						ISOdrift_corr = dat.loc["Control W22"][col3]
@@ -773,9 +776,10 @@ class Isotope(object):
 						dat = df.where(df["Error Code"] == 0)
 						print("Checking: {} ...".format(i))
 						self.log.append("Checking: {} ...".format(i))
+						key = dat.loc[[i],"key"].dropna()[0]
 						dat = dat.loc[i]
 						dat = runCheck2(dat,col4)
-						key = max(dat["key"])
+						
 						ISOmean = dat[col1]
 						ISOmem_corr = dat[col2]
 						ISOdrift_corr = dat[col3]
@@ -783,6 +787,7 @@ class Isotope(object):
 						count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 						val.append((key,i,dat.index.values[0][0],ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+						print(key)
 						if sd_smow >= limit:
 							self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -802,7 +807,10 @@ class Isotope(object):
 			df.set_index('key', inplace = True)
 			df.sort_index(inplace = True)
 
+			df["position"] = df.index.values-(df.index.values[0]-1)
 			self.run_overview = df
+
+
 
 
 		runOverview()
