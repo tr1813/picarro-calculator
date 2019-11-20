@@ -97,6 +97,37 @@ def AddSummaryRun(filename,conn):
 			print(e)
 	conn.commit()
 
+def AddRun(filename,conn):
+
+	statement1="""CREATE TABLE runlookup ('Analysis start' timestamp,
+		'RUN_ID' int,
+		PRIMARY KEY ('RUN_ID')
+		);"""
+
+	CreateTable(conn,statement1)
+	run = pd.read_csv(filename)
+
+	run_id = float(filename[-19:-11]+filename[-10:-4])
+
+	run["RUN_ID"] = run_id * np.ones(len(run))
+	print(run_id)
+
+	#sql = """ INSERT INTO runlookup (
+	#	'Analysis start',
+	#	'RUN_ID')
+	#	VALUES (?,?);"""
+
+	#c = conn.cursor()
+
+	#try:
+	#	c.execute(sql,tuple(row))
+	#except Error as e:
+	#	print(e)
+	
+	#conn.commit()
+
+
+
 def AddRaw(filename,conn):
 
 	statement=""" CREATE TABLE rawrun (
@@ -135,10 +166,16 @@ def AddRaw(filename,conn):
 		'Job' int,
 		'Method' varchar,
 		'Error Code' int,
+		'RUN_ID' int,
 		PRIMARY KEY ('Timestamp Mean')
 		);"""
 	
 	RAW = pd.read_csv(filename)
+
+	run_id = float(filename[-19:-11])
+
+	RAW["RUN_ID"] = run_id * np.ones(len(RAW))
+
 	CreateTable(conn,statement)
 
 	sql=""" INSERT INTO rawrun(
@@ -176,14 +213,14 @@ def AddRaw(filename,conn):
 		'Sample',
 		'Job',
 		'Method',
-		'Error Code') VALUES(
+		'Error Code','RUN_ID') VALUES(
 		?,?,?,?,?,
 		?,?,?,?,?,
 		?,?,?,?,?,
 		?,?,?,?,?,
 		?,?,?,?,?,
 		?,?,?,?,?,
-		?,?,?,?,?
+		?,?,?,?,?,?
 		);"""
 
 	c = conn.cursor()
