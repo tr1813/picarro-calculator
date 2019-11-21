@@ -111,7 +111,7 @@ class Isotope(object):
 			#return int(time.mktime(t.timetuple()))
 		
 		#pk = [int(f(i)) for i in self.raw["Time Code"].values]
-		pk = [int(str(i)[5:]) for i in self.noempty["Analysis"].values]
+		pk = [int(str(i).strip(" ")[2:]) for i in self.noempty["Analysis"].values]
 
 		self.noempty["key"] = pk
 
