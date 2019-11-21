@@ -14,8 +14,6 @@ from sqlite3 import Error
 import pickle
 
 
-
-
 def listFiles(dir):
 	return glob.glob("{}/*.csv".format(dir))
 
@@ -56,12 +54,15 @@ def AddSummaryRun(filename,conn):
 		('key' int,
 		'Identifier 1' varchar(255),
 		'Identifier 2' varchar(255),
+		'RUN_ID' int,
+		'position' int,
 		'd18O vsmow' float(2),
 		'd18O stdev. vsmow' float(2),
 		'd18O counts' int,
 		'd2H vsmow' float(2),
 		'd2H stdev. vsmow' float(2),
 		'd2H counts' int,
+		'inside GMWL' varchar(255),
 		PRIMARY KEY ('key')
 		);
 		"""
@@ -82,13 +83,18 @@ def AddSummaryRun(filename,conn):
 			('key',
 			'Identifier 1',
 			'Identifier 2',
+			'RUN_ID',
+			'position',
 			'd18O vsmow',
 			'd18O stdev. vsmow',
 			'd18O counts',
 			'd2H vsmow',
 			'd2H stdev. vsmow',
-			'd2H counts')
-			VALUES (?,?,?,?,?,?,?,?,?);"""
+			'd2H counts',
+			'inside GMWL')
+			VALUES (?,?,?,?,
+			?,?,?,?,
+			?,?,?,?);"""
 
 	for row in rows:
 

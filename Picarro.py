@@ -24,6 +24,7 @@ class Isotope(object):
 		self.dir = "../../Picarro_data/PICARRO_run_"+self.filename[31:46]
 		self.log = []
 		self.raw = None
+		self.noempty = None
 		self.summary = None
 		self.corr = None
 		self.coeffs = None
@@ -45,6 +46,7 @@ class Isotope(object):
 		self.HAUS1_sd = None
 		self.HAUS2_sd = None
 		self.TAP_sd = None
+		self.run_id = None
 
 	def Log(self):
 		for i in self.log:
@@ -57,30 +59,45 @@ class Isotope(object):
 		df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
 		df["Identifier 2"] = [i.strip() for i in df["Identifier 2"].values]
 		df["Line"] = [int(i) for i in df["Line"]]
+		self.run_id = float(self.filename[-19:-11]+self.filename[-10:-4])
+
+		df["RUN_ID"] = self.run_id * np.ones(len(df))
 		df.set_index(["Identifier 1","Identifier 2","Inj Nr"], inplace=True)
 
 		self.raw = df
 
 	def checkEmpty(self):
 
-		if np.any(np.isnan(self.raw["H2O_Mean"].values)) == 'True':  # checks a boolean array which evaluates to True if
+		df = self.raw.copy()
+		df = df.where(df["H2O_Mean"]!="              ").dropna()
+		df["H2O_Mean"] = pd.to_numeric(df["H2O_Mean"])
+		for i in df:
+			try:
+				df[i] = pd.to_numeric(df[i])
+			except:
+				print("Cannot convert column {} to numeric type".format(i))
+
+		self.noempty = df
+
+		diff = len(self.raw) -len(self.noempty)
+		if diff != 0:  # checks a boolean array which evaluates to True if
 															# if one cell is empty
 		
-			self.log.append("Warning: there is at least one empty line!")
+			self.log.append("Warning: there are some empty lines! {} to be precise".format(diff))
 		else: 
 			self.log.append("No empty cells. Proceeding...")
 
 	def checkVolume(self):
 
-		conds = [self.raw.H2O_Mean.values < 17000 , self.raw.H2O_Mean.values > 23000]	# create the conditions for ignoring a certain analysis line
+		conds = [self.noempty.H2O_Mean.values < 17000 , self.noempty.H2O_Mean.values > 23000]	# create the conditions for ignoring a certain analysis line
 		choices = [1, 2]													# what the error code value will become
 
 		out = np.select(conds, choices, default=0)							# mapping the error code on the conditions
 
-		self.raw["Error Code"]=out												# updating the dataFrame
+		self.noempty["Error Code"]=out												# updating the dataFrame
 
-		above = self.raw.where(self.raw["Error Code"] == 2)
-		below = self.raw.where(self.raw["Error Code"] == 1)
+		above = self.noempty.where(self.noempty["Error Code"] == 2)
+		below = self.noempty.where(self.noempty["Error Code"] == 1)
 		warning = pd.concat([above,below]).dropna()
 
 		lines =[i for i in warning["Line"].values]
@@ -94,15 +111,15 @@ class Isotope(object):
 			#return int(time.mktime(t.timetuple()))
 		
 		#pk = [int(f(i)) for i in self.raw["Time Code"].values]
-		pk = [int(str(i)[5:]) for i in self.raw["Analysis"].values]
+		pk = [int(str(i)[5:]) for i in self.noempty["Analysis"].values]
 
-		self.raw["key"] = pk
+		self.noempty["key"] = pk
 
 
 
 	def runSummary(self):
 
-		self.summary = self.raw[["Line",
+		self.summary = self.noempty[["Line",
 						"H2O_Mean",
 						"Good",
 						"Error Code",
@@ -148,12 +165,12 @@ class Isotope(object):
 
 
 		if isotope == "O":
-			self.corr =  self.raw[["key","Line","d(18_16)Mean","Ignore","Error Code"]]
+			self.corr =  self.noempty[["key","Line","d(18_16)Mean","Ignore","Error Code","RUN_ID"]]
 			self.corr = self.corr.where(self.corr["Line"]>6).dropna()
 			self.constraint = 0.1
 		else:
 			if isotope == "H":
-				self.corr =  self.raw[["key","Line","d(D_H)Mean","Ignore","Error Code"]]
+				self.corr =  self.noempty[["key","Line","d(D_H)Mean","Ignore","Error Code","RUN_ID"]]
 				self.corr = self.corr.where(self.corr["Line"]>6).dropna()
 				self.constraint = 0.8
 			else:
@@ -223,6 +240,8 @@ class Isotope(object):
 			std1_0 = df.loc["TAP"].loc["Conditioning"][col].values[-1:]
 			std2_0 =stds[0][-1:]
 			std3_0 = stds[1][-1:]
+
+
 		
 			return stds,(std1_0,std2_0,std3_0)
 
@@ -339,34 +358,23 @@ class Isotope(object):
 		
 		coefficients = [self.coeffs[i] for i in self.coeffs] # coefficients indexed from 1
 		
-		def makecoefflist(coeffs):
-			initlist= coeffs
-			newlist = []
-			lengths = []
-			previousline = []
-			counter=0
+		def makecoefflist():
+			df = self.corr["Line"]
+			coeffs = [self.coeffs[i] for i in self.coeffs]
 			
-			for j in range(3):
-				lengths.append(10)
-			for i in range(23):
-				lengths.append(4)
+			conditioning = df[0:4].values
+			coeff_conditioning = [1,1,1,1]
 			
-			for l in lengths:
-				counter +=1
-				if counter <=3:
-					previous = counter*l
-				else:
-					previous = 40-16 + counter*l
-				for i in range(l):
-					newlist.append(initlist[i])
-					previousline.append(previous)
-			newlist =[1,1,1,1] + newlist
-			previousline = [7,8,9,10] + previousline
+			standards = df[4:34].values-1-(df[4:34].values-1) %10
 			
-
-			return newlist,previousline
+			samples = df[34:].values -1-(df[34:].values-1) %4
+			
+			previous = list(conditioning) + list(standards) + list(samples)
+			
+			coeffs = coeff_conditioning+coeffs*3+coeffs[6:]*int(len(samples)/4)
+			return previous,coeffs
 		
-		newlist, previouslines = makecoefflist(coefficients)
+		previouslines,newlist  = makecoefflist()
 		
 		self.corr["coeffs"] = newlist
 		self.corr["previous"] = previouslines
@@ -387,7 +395,7 @@ class Isotope(object):
 			
 		self.corr[col1] = corrected_values
 		self.log.append('Successfully corrected values for memory effects')
-		self.memory = self.corr[["key","Line",col2,col1,"Error Code"]]
+		self.memory = self.corr[["key","Line",col2,col1,"Error Code","RUN_ID"]]
 
 	def OLSR(self,x,y,lims,ax=None):
 		xi=np.arange(lims[0],lims[1],0.25)
@@ -635,7 +643,7 @@ class Isotope(object):
 
 
 		def getSampleNames(df):
-			return df.index.levels[0].values  
+			return set([i[0] for i in df.index.values])
 		
 		def runCheck2(df1,col4):
 			df = df1.copy()
@@ -700,7 +708,7 @@ class Isotope(object):
 				ISOvsmow_corr = dat.iloc[0:10][col4]
 				count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 				sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-				val.append((key,i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+				val.append((key,i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
 				print(key)
 				if sd_smow >= limit:
 					self.log.append("Warning: high standard deviation on sample {}".format(i))
@@ -718,7 +726,7 @@ class Isotope(object):
 					ISOvsmow_corr = dat.loc["Conditioning"][col4]
 					count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 					sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-					val.append((key,i,"_Conditioning",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+					val.append((key,i,"_Conditioning",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
 					print(key)
 					if sd_smow >= limit:
 						self.log.append("Warning: high standard deviation on sample {}".format(i))
@@ -732,7 +740,7 @@ class Isotope(object):
 					ISOvsmow_corr = dat.loc["Standard"][col4]
 					count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 					sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-					val.append((key,i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+					val.append((key,i,"_Standard",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
 					print(key)
 					if sd_smow >= limit:
 						self.log.append("Warning: high standard deviation on sample {}".format(i))
@@ -752,7 +760,7 @@ class Isotope(object):
 						ISOvsmow_corr = dat.loc["Control"].iloc[j*4:(j+1)*4-1][col4]
 						count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-						val.append((key,i,"_Control {}".format(j+1),ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+						val.append((key,i,"_Control {}".format(j+1),ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
 					if sd_smow >= limit:
 						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -767,7 +775,7 @@ class Isotope(object):
 						ISOvsmow_corr = dat.loc["Control W22"][col4]
 						count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-						val.append((key,i,"_Control W22",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+						val.append((key,i,"_Control W22",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
 						if sd_smow >= limit:
 							self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -776,6 +784,7 @@ class Isotope(object):
 						dat = df.where(df["Error Code"] == 0)
 						print("Checking: {} ...".format(i))
 						self.log.append("Checking: {} ...".format(i))
+
 						key = dat.loc[[i],"key"].dropna()[0]
 						dat = dat.loc[i]
 						dat = runCheck2(dat,col4)
@@ -786,7 +795,7 @@ class Isotope(object):
 						ISOvsmow_corr = dat[col4]
 						count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-						val.append((key,i,dat.index.values[0][0],ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count))
+						val.append((key,i,dat.index.values[0][0],ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
 						print(key)
 						if sd_smow >= limit:
 							self.log.append("Warning: high standard deviation on sample {}".format(i))
@@ -803,7 +812,8 @@ class Isotope(object):
 					"stdev. drift",
 					"{} vsmow".format(general_label),
 					"{} stdev. vsmow".format(general_label),
-					"{} counts".format(general_label)]) 
+					"{} counts".format(general_label),
+					"RUN_ID"]) 
 			df.set_index('key', inplace = True)
 			df.sort_index(inplace = True)
 
@@ -817,7 +827,7 @@ class Isotope(object):
 
 	def getFinalValues(self):
 
-		return self.run_overview.iloc[:,[0,1,8,9,10]]
+		return self.run_overview.iloc[:,[0,1,11,12,8,9,10]]
 
 	def checkStandards(self,isotope="O"):
 
@@ -855,6 +865,7 @@ class Merged(object):
 	def __init__(self,O18,D):
 
 		self.merge = None
+		self.trimmed = None
 		self.O18 = O18
 		self.D = D
 		self.coeffs = None
@@ -874,10 +885,14 @@ class Merged(object):
 		df = pd.DataFrame(d,index = np.arange(1,11,1))
 		self.coeffs = df
 
+	def TrimStandards(self):
 
-	def Plot(self):
+		ls = ["HAUS1", "HAUS2", "TAP", "W22"]
+		df = self.merge.copy()
+		for i in ls:
+			df = df[df["Identifier 1"] !=i]
 
-		OverviewPlot(self.O18,self.D)
+		self.trimmed = df
 
 	def suggestedReruns(self):
 
@@ -919,8 +934,8 @@ class Merged(object):
 
 			return df3
 
-		self.non_triplicate = checkCount(self.merge,2)
-		self.non_perfect = checkCount(self.merge,3)
+		self.non_triplicate = checkCount(self.trimmed,2)
+		self.non_perfect = checkCount(self.trimmed,3)
 
 		self.high_std = checkSTDv(self.merge)
 		self.gmwl = CheckGMWL(self.merge)
@@ -995,6 +1010,8 @@ def FullRun(filename):
 	Z = Merged(X,Y)
 	Z.setMerge()
 	Z.setCoeffs()
+	Z.TrimStandards()
+	Z.suggestedReruns()
 
 	return Z
 
@@ -1003,24 +1020,21 @@ def Merge(IsoO,IsoH):
 	dfO = IsoO.getFinalValues()
 	dfH = IsoH.getFinalValues()
 
-	df = pd.merge(dfO,dfH, on = ["key","Identifier 1", "Identifier 2"])
-
-	ls = ["HAUS1", "HAUS2", "TAP", "W22"]
-
-	for i in ls:
-		df = df[df["Identifier 1"] !=i]
+	df = pd.merge(dfO,dfH, on = ["key","Identifier 1", "Identifier 2","RUN_ID","position"])
 
 	return df
 
-def OverviewPlot(IsoO,IsoH):
 
-	merged = Merge(IsoO,IsoH)
+
+
+def OverviewPlot(Z):
+
 
 	fig,ax = plt.subplots()
-	xi = merged["d18O vsmow"]
-	yi = merged["d2H vsmow"]
-	xi_err = merged["d18O stdev. vsmow"]
-	yi_err = merged["d2H stdev. vsmow"]
+	xi = Z.trimmed["d18O vsmow"]
+	yi = Z.trimmed["d2H vsmow"]
+	xi_err = Z.trimmed["d18O stdev. vsmow"]
+	yi_err = Z.trimmed["d2H stdev. vsmow"]
 	ax.plot(xi,yi,'o',label="results")
 	ax.errorbar(xi,yi,yerr = yi_err  ,xerr= xi_err,
 			marker = '.',
