@@ -31,7 +31,7 @@ def CreateConnection(db_file):
 		return conn
 	except Error as e:
 		print(e)
- 
+
 	return conn
 
 def CreateTable(conn,statement):
@@ -44,14 +44,14 @@ def CreateTable(conn,statement):
 	"""
 	try:
 		c = conn.cursor()
-	
+
 		c.execute(statement)
 	except Error as e:
 		print(e)
 
 def AddSummaryRun(filename,conn):
 
-	statement = """CREATE TABLE runs 
+	statement = """CREATE TABLE runs
 		('key' int,
 		'Identifier 1' varchar(255),
 		'Identifier 2' varchar(255),
@@ -71,11 +71,11 @@ def AddSummaryRun(filename,conn):
 	c = conn.cursor()
 	def getrows(df):
 		rows = []
-		
+
 		for i,j in zip(df.index,df.values):
 			rows.append(tuple([i]+list(j)))
 		return rows
-		
+
 	rows = getrows(RUN.merge)
 	sql ="""INSERT INTO runs
 			('key',
@@ -86,11 +86,11 @@ def AddSummaryRun(filename,conn):
 			'd18O counts',
 			'd2H vsmow',
 			'd2H stdev. vsmow',
-			'd2H counts') 
+			'd2H counts')
 			VALUES (?,?,?,?,?,?,?,?,?);"""
 
 	for row in rows:
-					 
+
 		try:
 			c.execute(sql,tuple(row))
 		except Error as e:
@@ -123,7 +123,7 @@ def AddRun(filename,conn):
 	#	c.execute(sql,tuple(row))
 	#except Error as e:
 	#	print(e)
-	
+
 	#conn.commit()
 
 
@@ -169,7 +169,7 @@ def AddRaw(filename,conn):
 		'RUN_ID' int,
 		PRIMARY KEY ('Timestamp Mean')
 		);"""
-	
+
 	RAW = pd.read_csv(filename)
 
 	run_id = float(filename[-19:-11])
@@ -231,3 +231,38 @@ def AddRaw(filename,conn):
 		except Error as e:
 			print(e)
 	conn.commit()
+
+
+def checkforrawdata(path_to_watch):
+    newrawdata=list()
+    try:
+        with open(os.path.join(path_to_watch,'filelist.txt'),'rb') as fp:
+            ls_old=pickle.load(fp)
+        ls_new=list(f for f in glob.glob(os.path.join(path_to_watch,'*.csv')))
+        if ls_old == ls_new:
+            print('There is no new raw data in directory:',path_to_watch)
+
+        else:
+            added= [f for f in ls_new if not f in ls_old]
+            removed= [f for f in ls_old if not f in ls_new]
+            if removed:
+                ls_new=ls_new+removed
+                with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
+                    pickle.dump(ls_new,fp)
+                print('missing file:',removed)
+            if added:
+                newrawdata.append([path_to_watch + '\\' + i for i in added])
+                with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
+                    pickle.dump(ls_new,fp)
+                print('new file',added)
+                return newrawdata
+    except EOFError:
+        l=list()
+        with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
+            pickle.dump(l,fp)
+        print('Could not find FileList...created empty FileList in directory:',path_to_watch)
+    except FileNotFoundError:
+        l=list()
+        with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
+            pickle.dump(l,fp)
+        print('Could not find FileList...created empty FileList in directory:',path_to_watch)
