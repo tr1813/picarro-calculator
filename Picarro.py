@@ -65,6 +65,11 @@ class Isotope(object):
 		df.set_index(["Identifier 1","Identifier 2","Inj Nr"], inplace=True)
 
 		self.raw = df
+	def DummyCheck(self):
+
+		if len(self.raw)>132:
+			print("Your file has 133 lines. I give up now...")
+
 
 	def checkEmpty(self):
 
@@ -981,8 +986,10 @@ class Merged(object):
 			
 def Run(iso,filename):
 
+
 	RUN = Isotope(filename)
 	RUN.readRaw()
+	RUN.DummyCheck()
 	RUN.checkEmpty()
 	RUN.checkVolume()
 	RUN.setPrimaryKey()
@@ -1001,6 +1008,8 @@ def Run(iso,filename):
 
 
 def FullRun(filename):
+
+
 
 	print("Running the corrections for Oxygen \n ... \n ...")
 	X = Run("O",filename)

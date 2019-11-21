@@ -56,12 +56,15 @@ def AddSummaryRun(filename,conn):
 		('key' int,
 		'Identifier 1' varchar(255),
 		'Identifier 2' varchar(255),
+		'RUN_ID' int,
+		'position' int,
 		'd18O vsmow' float(2),
 		'd18O stdev. vsmow' float(2),
 		'd18O counts' int,
 		'd2H vsmow' float(2),
 		'd2H stdev. vsmow' float(2),
 		'd2H counts' int,
+		'inside GMWL' varchar(255) ,
 		PRIMARY KEY ('key')
 		);
 		"""
@@ -82,13 +85,18 @@ def AddSummaryRun(filename,conn):
 			('key',
 			'Identifier 1',
 			'Identifier 2',
+			'RUN_ID',
+			'position',
 			'd18O vsmow',
 			'd18O stdev. vsmow',
 			'd18O counts',
 			'd2H vsmow',
 			'd2H stdev. vsmow',
-			'd2H counts')
-			VALUES (?,?,?,?,?,?,?,?,?);"""
+			'd2H counts',
+			'inside GMWL')
+			VALUES (?,?,?,?,
+			?,?,?,?,
+			?,?,?,?);"""
 
 	for row in rows:
 
@@ -98,9 +106,9 @@ def AddSummaryRun(filename,conn):
 			print(e)
 	conn.commit()
 
-def AddRun(filename,conn):
+def AddRun(filename,nickname,conn):
 
-	statement1="""CREATE TABLE runlookup ('Analysis start' timestamp,
+	statement1="""CREATE TABLE runlookup ('NickName' varchar(255),
 		'RUN_ID' int,
 		PRIMARY KEY ('RUN_ID')
 		);"""
@@ -108,24 +116,24 @@ def AddRun(filename,conn):
 	CreateTable(conn,statement1)
 	run = pd.read_csv(filename)
 
-	run_id = float(filename[-19:-11]+filename[-10:-4])
+	run_id = float(filename[-19:-11])
 
 	run["RUN_ID"] = run_id * np.ones(len(run))
 	print(run_id)
 
-	#sql = """ INSERT INTO runlookup (
-	#	'Analysis start',
-	#	'RUN_ID')
-	#	VALUES (?,?);"""
+	sql = """ INSERT INTO runlookup (
+		'NickName',
+		'RUN_ID')
+		VALUES (?,?);"""
 
-	#c = conn.cursor()
+	c = conn.cursor()
 
-	#try:
-	#	c.execute(sql,tuple(row))
-	#except Error as e:
-	#	print(e)
+	try:
+		c.execute(sql,(nickname,run_id))
+	except Error as e:
+		print(e)
 
-	#conn.commit()
+	conn.commit()
 
 
 
