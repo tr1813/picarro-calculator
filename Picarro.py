@@ -364,15 +364,18 @@ class Isotope(object):
 			
 			conditioning = df[0:4].values
 			coeff_conditioning = [1,1,1,1]
-			
+
 			standards = df[4:34].values-1-(df[4:34].values-1) %10
-			
+
 			samples = df[34:].values -1-(df[34:].values-1) %4
-			
+			coeff_standards = coeffs * 3
 			previous = list(conditioning) + list(standards) + list(samples)
-			
-			coeffs = coeff_conditioning+coeffs*3+coeffs[6:]*int(len(samples)/4)
-			return previous,coeffs
+			coeff_samples = []
+			index_diff = (df.values[34:]-1)%4
+			for i in index_diff:
+			    coeff_samples.append(coeffs[int(i)])
+			new_list =  coeff_conditioning + coeff_standards + coeff_samples
+			return previous,new_list
 		
 		previouslines,newlist  = makecoefflist()
 		
@@ -647,6 +650,8 @@ class Isotope(object):
 		
 		def runCheck2(df1,col4):
 			df = df1.copy()
+
+			length = len(df)
 			
 			df = df[col4]
 			
@@ -654,13 +659,13 @@ class Isotope(object):
 			stds.append((df.std(),"no missing measurements"))
 			
 			for i in range(len(df)):
-				statement1 = "missing measurement {}".format((i)%4)
-				stds.append((df.iloc[[i,(i+1)%4,(i+2)%4]].std(),statement1))
-				statement2 ="missing measurements {} and {}".format((i)%4,(i+1)%4)
-				stds.append((df.iloc[[i,(i+1)%4]].std(),statement2))
+				statement1 = "missing measurement {}".format((i)%length)
+				stds.append((df.iloc[[i,(i+1)%length,(i+2)%length]].std(),statement1))
+				statement2 ="missing measurements {} and {}".format((i)%length,(i+1)%length)
+				stds.append((df.iloc[[i,(i+1)%length]].std(),statement2))
 				if i <2:
-					statement3 ="missing measurements {} and {}".format((i-1)%4+1,(i+1)%4+1)
-					stds.append((df.iloc[[i,(i+2)%4]].std(),statement3))
+					statement3 ="missing measurements {} and {}".format((i-1)%length+1,(i+1)%length+1)
+					stds.append((df.iloc[[i,(i+2)%length]].std(),statement3))
 
 			def checks(mylist):
 				
@@ -693,7 +698,8 @@ class Isotope(object):
 							print("too high std. deviation")
 							self.log.append("too high std. deviation")
 
-			checks(stds)
+			if len(df) == 4:
+				checks(stds)
 			return df1
 
 
