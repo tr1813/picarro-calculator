@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
+# -*- coding: utf-8 -*-
 
 import sys; sys.path
 
@@ -930,7 +930,7 @@ class Merged(object):
 		if len(self.non_triplicate) > 0:
 			
 			print("Some samples were not triplicated")
-			print(self.non_triplicate["d18O vsmow"])
+			print(self.non_triplicate["Identifier 1"])
 			print('\n')
 	
 		else:
@@ -941,7 +941,7 @@ class Merged(object):
 		print("Checking for high standard deviations ...")
 		if len(self.high_std)  > 0:
 				print("Suggested reruns for following samples, which had high standard deviations")
-				print(self.high_std["d18O vsmow"])
+				print(self.high_std["Identifier 1"])
 				print('\n')
 				
 		else:
@@ -951,7 +951,7 @@ class Merged(object):
 		print("Checking for samples lying outside of the GWML ...")
 		if len(self.gmwl)  > 0:
 				print("Suggested reruns for following samples, which were outside of the GMWL")
-				print(self.gmwl["d18O vsmow"])
+				print(self.gmwl["Identifier 1"])
 				print('\n')
 		else:
 			print("Nothing to report")
@@ -1004,6 +1004,11 @@ def Merge(IsoO,IsoH):
 	dfH = IsoH.getFinalValues()
 
 	df = pd.merge(dfO,dfH, on = ["key","Identifier 1", "Identifier 2"])
+
+	ls = ["HAUS1", "HAUS2", "TAP", "W22"]
+
+	for i in ls:
+		df = df[df["Identifier 1"] !=i]
 
 	return df
 
