@@ -14,6 +14,8 @@ from sqlite3 import Error
 import pickle
 
 
+
+
 def listFiles(dir):
 	return glob.glob("{}/*.csv".format(dir))
 
@@ -54,15 +56,12 @@ def AddSummaryRun(filename,conn):
 		('key' int,
 		'Identifier 1' varchar(255),
 		'Identifier 2' varchar(255),
-		'RUN_ID' int,
-		'position' int,
 		'd18O vsmow' float(2),
 		'd18O stdev. vsmow' float(2),
 		'd18O counts' int,
 		'd2H vsmow' float(2),
 		'd2H stdev. vsmow' float(2),
 		'd2H counts' int,
-		'inside GMWL' varchar(255),
 		PRIMARY KEY ('key')
 		);
 		"""
@@ -83,18 +82,13 @@ def AddSummaryRun(filename,conn):
 			('key',
 			'Identifier 1',
 			'Identifier 2',
-			'RUN_ID',
-			'position',
 			'd18O vsmow',
 			'd18O stdev. vsmow',
 			'd18O counts',
 			'd2H vsmow',
 			'd2H stdev. vsmow',
-			'd2H counts',
-			'inside GMWL')
-			VALUES (?,?,?,?,
-			?,?,?,?,
-			?,?,?,?);"""
+			'd2H counts')
+			VALUES (?,?,?,?,?,?,?,?,?);"""
 
 	for row in rows:
 
@@ -241,36 +235,42 @@ def AddRaw(filename,conn):
 
 
 def checkforrawdata(path_to_watch):
-    newfile=list()
-    try:
-        with open(os.path.join(path_to_watch,'filelist.txt'),'rb') as fp:
-            ls_old=pickle.load(fp)
-        ls_new=list(f for f in glob.glob(os.path.join(path_to_watch,'*.csv')))
-        if ls_old == ls_new:
-            print('There is no new raw data in directory:',path_to_watch)
+	newfile=list()
+	try:
+		with open(os.path.join(path_to_watch,'filelist.txt'),'rb') as fp:
+			ls_old=pickle.load(fp)
+			ls_new=list(f for f in glob.glob(os.path.join(path_to_watch,'*.csv')))
+		if ls_old == ls_new:
+			print('There is no new raw data in directory:',path_to_watch)
 
-        else:
-            added= [f for f in ls_new if not f in ls_old]
-            removed= [f for f in ls_old if not f in ls_new]
-            if removed:
-                ls_new=ls_new+removed
-                with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
-                    pickle.dump(ls_new,fp)
-                print('missing file:',removed)
-            if added:
+		else:
+			added= [f for f in ls_new if not f in ls_old]
+			removed= [f for f in ls_old if not f in ls_new]
+			if removed:
+				ls_new=ls_new+removed
+				with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
+					pickle.dump(ls_new,fp)
+				print('missing file:',removed)
+			if added:
+				newfile=list(i for i in added)
+				with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
+					pickle.dump(ls_new,fp)
+				print('new file',added)
+				return newfile
+	except EOFError:
+		l=list()
+		with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
+			pickle.dump(l,fp)
+		print('Could not find FileList...created empty FileList in directory:',path_to_watch)
 
-                newfile=list(i for i in added)
-                with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
-                    pickle.dump(ls_new,fp)
-                print('new file',added)
-                return newfile
-    except EOFError:
-        l=list()
-        with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
-            pickle.dump(l,fp)
-        print('Could not find FileList...created empty FileList in directory:',path_to_watch)
-    except FileNotFoundError:
-        l=list()
-        with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
-            pickle.dump(l,fp)
-        print('Could not find FileList...created empty FileList in directory:',path_to_watch)
+	except FileNotFoundError:
+		l=list()
+		with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
+			pickle.dump(l,fp)
+		newfile=list(f for f in glob.glob(os.path.join(path_to_watch,'*.csv')))
+		with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
+			pickle.dump(newfile,fp)
+		print('Could not find FileList...created empty FileList in directory:',path_to_watch)
+		print('Added all existing files in directory',path_to_watch)
+		print('Existing files:',newfile)
+		return newfile
