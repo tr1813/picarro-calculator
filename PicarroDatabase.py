@@ -11,6 +11,7 @@ import Picarro as pica
 import sqlite3
 import glob
 from sqlite3 import Error
+import pickle
 
 
 
@@ -234,7 +235,7 @@ def AddRaw(filename,conn):
 
 
 def checkforrawdata(path_to_watch):
-    newrawdata=list()
+    newfile=list()
     try:
         with open(os.path.join(path_to_watch,'filelist.txt'),'rb') as fp:
             ls_old=pickle.load(fp)
@@ -251,11 +252,12 @@ def checkforrawdata(path_to_watch):
                     pickle.dump(ls_new,fp)
                 print('missing file:',removed)
             if added:
-                newrawdata.append([path_to_watch + '\\' + i for i in added])
+
+                newfile=list(i for i in added)
                 with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
                     pickle.dump(ls_new,fp)
                 print('new file',added)
-                return newrawdata
+                return newfile
     except EOFError:
         l=list()
         with open(os.path.join(path_to_watch,'filelist.txt'),'wb') as fp:
