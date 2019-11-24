@@ -59,7 +59,7 @@ class Isotope(object):
 		df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
 		df["Identifier 2"] = [i.strip() for i in df["Identifier 2"].values]
 		df["Line"] = [int(i) for i in df["Line"]]
-		self.run_id = float(self.filename[-19:-11]+self.filename[-10:-4])
+		self.run_id = float(self.filename[-19:-11])
 
 		df["RUN_ID"] = self.run_id * np.ones(len(df))
 		df.set_index(["Identifier 1","Identifier 2","Inj Nr"], inplace=True)
@@ -342,7 +342,7 @@ class Isotope(object):
 				writer.writerows(lines)
 			coeffFile.close()
 
-		writeCoeffsfile(self.coeffs)
+		#writeCoeffsfile(self.coeffs)
 
 
 	def getUpdatedSD(self):
@@ -418,11 +418,11 @@ class Isotope(object):
 		if isotope == "O":
 			col1 = "d(18_16)Mean"
 			col2 = "d(18_16)mem_corrected"
-			posxy=((7,-3.5,"HAUS1"),(7,-31.5,"HAUS2"),(7,-18,"TAP"),(3.2,-7,"W22"))
+			posxy=((7,-3.5,"HAUS1"),(7,-31.5,"HAUS2"),(7,-18,"TAP"),(3.2,-7,"CONTROL"))
 		else:
 			col1 = "d(D_H)Mean"
 			col2 = "d(D_H)mem_corrected"
-			posxy=((7,0,"HAUS1"),(7,-200,"HAUS2"),(7,-110,"TAP"),(3.2,-25,"W22"))
+			posxy=((7,0,"HAUS1"),(7,-200,"HAUS2"),(7,-110,"TAP"),(3.2,-25,"CONTROL"))
 
 		df = self.memory
 
@@ -450,13 +450,15 @@ class Isotope(object):
 		self.OLSR(x,ytap_corr,(0,10),ax3)[0]
 		ax3.text(posxy[2][0],posxy[2][1],posxy[2][2])
 
-		y = df.loc["W22"][col1]
-		x =[i[1] for i in df.loc["W22"][col1].index.values]
-		y_corr = df.loc["W22"][col2]
+		y = df.iloc[34:38][col1] # for the control run (either W22 or HUSN) 
+		x =np.arange(1,5)
+		y_corr = df.iloc[34:38][col2]
 		ax4.plot(x,y,'o',color = 'black',markerfacecolor='w')
 		ax4.plot(x,y_corr,'o',color = 'black',markersize = 3, markerfacecolor='black')
 		self.OLSR(x,y_corr,(0,4),ax4)[0]
-		ax4.text(posxy[3][0],posxy[3][1],posxy[3][2])
+		posx = ax4.get_xlim()[1]+0.5
+		posy = ax4.get_ylim()[0]
+		ax4.text(posx,posy,df.iloc[34:38].index[0][0])
 		ax4.set_xlim(0,5)
 
 		for ax in (ax1,ax2,ax3,ax4):
@@ -776,17 +778,27 @@ class Isotope(object):
 						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
 				else:
-					if i == 'W22':
+					if i == 'W22' or i=='HUSN':
 						dat = df.where(df["Error Code"] == 0)
 						dat = dat.loc[i]
-						key = dat.loc[[i,"Control W22"],"key"][0]
-						ISOmean = dat.loc["Control W22"][col1]
-						ISOmem_corr = dat.loc["Control W22"][col2]
-						ISOdrift_corr = dat.loc["Control W22"][col3]
-						ISOvsmow_corr = dat.loc["Control W22"][col4]
-						count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
-						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-						val.append((key,i,"_Control W22",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
+						try:
+							key = dat.loc[[i,"Control W22"],"key"][0]
+							ISOmean = dat.loc["Control W22"][col1]
+							ISOmem_corr = dat.loc["Control W22"][col2]
+							ISOdrift_corr = dat.loc["Control W22"][col3]
+							ISOvsmow_corr = dat.loc["Control W22"][col4]
+							count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
+							sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
+							val.append((key,i,"_Control W22",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
+						except:
+							key = dat.loc[[i,"Control HUSN"],"key"][0]
+							ISOmean = dat.loc["Control HUSN"][col1]
+							ISOmem_corr = dat.loc["Control HUSN"][col2]
+							ISOdrift_corr = dat.loc["Control HUSN"][col3]
+							ISOvsmow_corr = dat.loc["Control HUSN"][col4]
+							count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
+							sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
+							val.append((key,i,"_Control HUSN",ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
 						if sd_smow >= limit:
 							self.log.append("Warning: high standard deviation on sample {}".format(i))
 
@@ -898,7 +910,7 @@ class Merged(object):
 
 	def TrimStandards(self):
 
-		ls = ["HAUS1", "HAUS2", "TAP", "W22"]
+		ls = ["HAUS1", "HAUS2", "TAP", "W22","HUSN"]
 		df = self.merge.copy()
 		for i in ls:
 			df = df[df["Identifier 1"] !=i]
@@ -1019,7 +1031,7 @@ def FullRun(filename):
 	Y =Run("H",filename)
 	print('Done!')
 
-	OverviewDatatoCSV(X,Y)
+	#OverviewDatatoCSV(X,Y)
 	print("now merging the O and H isotope data \n ... \n ...")
 
 	Z = Merged(X,Y)
