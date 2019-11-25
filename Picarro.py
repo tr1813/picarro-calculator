@@ -1001,10 +1001,14 @@ class Merged(object):
 			print("Nothing to report")
 			print('\n')
 
-def RunFromDB(name,run,conn,iso):
+def RunFromDB(by=None,date=None,name=None,run=None,conn=None,iso="O"):
+	def DummyCheck2(df):
+		if len(df) >132:
+			raise Exception("The dataframe contains more than 132 lines. Please narrow down the search. Quitting...")
 	ISO = Isotope()
-	ISO.raw = getRawData(name,run,conn)
+	ISO.raw = getRawData(by=by,date=date,name=name,run=run,conn=conn)
 	try:
+		DummyCheck2(ISO.raw)
 		ISO.checkEmpty()
 		ISO.checkVolume()
 		ISO.setPrimaryKey()
@@ -1047,7 +1051,7 @@ def Run(iso,filename):
 	return RUN
 
 
-def FullRun(filename = None,name=None,run=None,conn=None):
+def FullRun(filename = None,name=None,run=None,conn=None, date = None, by= None):
 
 	if filename is not None:
 
@@ -1064,11 +1068,11 @@ def FullRun(filename = None,name=None,run=None,conn=None):
 
 	else:
 		print("Running the corrections for Oxygen \n ... \n ...")
-		X = RunFromDB(name=name,run=run,conn=conn,iso = "O")
+		X = RunFromDB(date = date,by=by,name=name,run=run,conn=conn,iso = "O")
 		print('Done! \n ... \n ...\n ... \n ...')
 
 		print("Running the corrections for Deuterium \n ... \n ...")
-		Y = RunFromDB(name=name,run=run,conn=conn,iso = "H")
+		Y = RunFromDB(date = date,by=by,name=name,run=run,conn=conn,iso = "H")
 		print('Done!')
 
 		#OverviewDatatoCSV(X,Y)
@@ -1179,36 +1183,59 @@ def OverviewDatatoCSV(IsoO,IsoH):
 				summary.to_csv(dir_path+'/run_summary.csv')
 				writelog()
 
-def getRawData(name,run,conn):
-    statement = """SELECT r.'Analysis',r.'Line',r.'Identifier 1',r.'Identifier 2',r.'Inj Nr',
-    r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean'
-    from rawrun r, runlookup rlk
-    WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
+def getRawData(conn,by,date=None,name=None,run=None):
+	if by == 'keyword':
+		statement = """SELECT r.'Analysis',r.'Line',r.'Identifier 1',r.'Identifier 2',r.'Inj Nr',
+	    	r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean'
+	    	from rawrun r, runlookup rlk
+	    	WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
+		df = pd.read_sql_query(statement,conn)
+	else:
+		if by == 'date':
+			statement = """SELECT r.'Analysis',r.'Line',r.'Identifier 1',r.'Identifier 2',r.'Inj Nr',
+	    	r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean'
+	    	from rawrun r, runlookup rlk
+	    	WHERE (r.RUN_ID = {} and r.RUN_ID = rlk.RUN_ID);""".format(date)
+			df = pd.read_sql_query(statement,conn)
+		else:
+			raise Exception("by= must be either date (format: yyyymmdd) or keyword")
 
+	df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
+	df["Identifier 2"] = [i.strip() for i in df["Identifier 2"].values]
+	df["Line"] = [int(i) for i in df["Line"]]
+	df.set_index(["Identifier 1","Identifier 2","Inj Nr"], inplace = True)
 
-    df = pd.read_sql_query(statement,conn)
-    df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
-    df["Identifier 2"] = [i.strip() for i in df["Identifier 2"].values]
-    df["Line"] = [int(i) for i in df["Line"]]
-    df.set_index(["Identifier 1","Identifier 2","Inj Nr"], inplace = True)
-    return df
+	return df
 
-def getCorrectedFromDB(name,run,conn):
-    statement = """SELECT r.'key',r.'Identifier 1',r.'Identifier 2',r.'RUN_ID',r.'position',
-    r.'d18O vsmow',r.'d18O stdev. vsmow',r.'d18O counts',
-    r.'d2H vsmow',r.'d2H stdev. vsmow',r.'d2H counts',rlk.NickName
-    from runs r, runlookup rlk
-    WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
+def getCorrectedFromDB(conn,by,date=None,name=None,run=None):
+	if by == 'keyword':
+		statement = """SELECT r.'key',r.'Identifier 1',r.'Identifier 2',r.'RUN_ID',r.'position',
+    	r.'d18O vsmow',r.'d18O stdev. vsmow',r.'d18O counts',
+    	r.'d2H vsmow',r.'d2H stdev. vsmow',r.'d2H counts',rlk.NickName
+    	from runs r, runlookup rlk
+    	WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
+		df = pd.read_sql_query(statement,conn)
+	else:
+		if by == 'date':
+			statement =  """SELECT r.'key',r.'Identifier 1',r.'Identifier 2',r.'RUN_ID',r.'position',
+    		r.'d18O vsmow',r.'d18O stdev. vsmow',r.'d18O counts',
+    		r.'d2H vsmow',r.'d2H stdev. vsmow',r.'d2H counts',rlk.NickName
+    		from runs r, runlookup rlk
+    		WHERE (r.RUN_ID = {} and r.RUN_ID = rlk.RUN_ID);""".format(date)
+			df = pd.read_sql_query(statement,conn)
+		else:
+			raise Exception("by= must be either date (format: yyyymmdd) or keyword")
 
+	df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
+	df["Identifier 2"] = [i.strip() for i in df["Identifier 2"].values]
+	df.set_index(["key"], inplace = True)
+	ls = ["HAUS1", "HAUS2", "TAP", "W22","HUSN"]
+	for i in ls:
+		df = df[df["Identifier 1"] !=i]
 
-    df = pd.read_sql_query(statement,conn)
-    df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
-    df["Identifier 2"] = [i.strip() for i in df["Identifier 2"].values]
-    df.set_index(["key"], inplace = True)
+	return df
 
-    ls = ["HAUS1", "HAUS2", "TAP", "W22","HUSN"]
-
-    for i in ls:
-        df = df[df["Identifier 1"] !=i]
-
-    return df
+def PlotRunFromDB(conn,by,date=None,name=None,run=None):
+	X = Merged()
+	X.trimmed = getCorrectedFromDB(conn,by,date=date,name=name,run=run)
+	OverviewPlot(X)
