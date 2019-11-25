@@ -136,7 +136,6 @@ def AddRun(filename,nickname,conn):
 	conn.commit()
 
 
-
 def AddRaw(filename,conn):
 
 	statement=""" CREATE TABLE rawrun (
@@ -290,15 +289,16 @@ def ReplaceName(conn,RUN_ID,newname):
     :param RUN_ID: the run id, an eight digit integer with format yyyymmdd
 	:param newname: the new nick name
     """
-    
+
     statement= """UPDATE runlookup
     SET RUN_ID = {0}, NickName = '{1}'
     WHERE RUN_ID = {0};""".format(RUN_ID,newname)
-    
+
     try:
         c = conn.cursor()
 
         c.execute(statement)
     except Error as e:
             print(e)
-        conn.commit()
+
+    conn.commit()
