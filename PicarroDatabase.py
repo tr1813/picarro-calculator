@@ -136,6 +136,7 @@ def AddRun(filename,nickname,conn):
 	conn.commit()
 
 
+
 def AddRaw(filename,conn):
 
 	statement=""" CREATE TABLE rawrun (
@@ -289,16 +290,36 @@ def ReplaceName(conn,RUN_ID,newname):
     :param RUN_ID: the run id, an eight digit integer with format yyyymmdd
 	:param newname: the new nick name
     """
-
+    
     statement= """UPDATE runlookup
     SET RUN_ID = {0}, NickName = '{1}'
     WHERE RUN_ID = {0};""".format(RUN_ID,newname)
-
+    
     try:
         c = conn.cursor()
 
         c.execute(statement)
     except Error as e:
             print(e)
+        conn.commit()
+		
+### In case the database is rebuilt, and the run look up table needs to be done again, uncomment the next bit of code.
 
-    conn.commit()
+
+#strips = ["~$","J:\\c715\\Picarro\\Results\\Results 2019\\Picarro-Results-",".xlsx","-","_"]
+
+#nicknames = []
+
+#for i in glob.glob(r"J:\c715\Picarro\Results\Results 2019\*.xlsx"):
+#    full = i
+#    for j in strips:
+
+#        full = full.replace(j," ")
+#    #print(full)
+#    if full.startswith(" 2019") == True:
+#        nicknames.append(full)
+    
+#RUN_IDS = glob.glob(r"J:\c715\Picarro\Results\Results 2019\Raw data\*.csv")
+
+#for i,j in zip(nicknames,RUN_IDS):
+#    pdb.AddRun(j,i,conn)
