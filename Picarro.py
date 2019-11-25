@@ -19,7 +19,7 @@ class Isotope(object):
 	"""docstring for Isotope
 	A object of data"""
 	def __init__(self,filename):
-		
+
 		self.filename = filename
 		self.dir = "../../Picarro_data/PICARRO_run_"+self.filename[31:46]
 		self.log = []
@@ -57,6 +57,8 @@ class Isotope(object):
 		renamed = dict([(i,i.strip()) for i in df]) # strip white space from column names
 		df.rename(columns=renamed, inplace=True)	# and rename all headers of the dataFrame with new 'clean names'
 		df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
+		if len(df['Identifier 1'].values[0]) < 1:
+			raise Exception('Sample description missing, load it manually')
 		df["Identifier 2"] = [i.strip() for i in df["Identifier 2"].values]
 		df["Line"] = [int(i) for i in df["Line"]]
 		self.run_id = float(self.filename[-19:-11])
@@ -87,9 +89,9 @@ class Isotope(object):
 		diff = len(self.raw) -len(self.noempty)
 		if diff != 0:  # checks a boolean array which evaluates to True if
 															# if one cell is empty
-		
+
 			self.log.append("Warning: there are some empty lines! {} to be precise".format(diff))
-		else: 
+		else:
 			self.log.append("No empty cells. Proceeding...")
 
 	def checkVolume(self):
@@ -114,7 +116,7 @@ class Isotope(object):
 		#def f(timecode):
 			#t = datetime.datetime.strptime(timecode,'   %Y/%m/%d %H:%M:%S')
 			#return int(time.mktime(t.timetuple()))
-		
+
 		#pk = [int(f(i)) for i in self.raw["Time Code"].values]
 		pk = [int(str(i).strip(" ")[2:]) for i in self.noempty["Analysis"].values]
 
@@ -130,14 +132,14 @@ class Isotope(object):
 						"Error Code",
 						"d(18_16)Mean",
 						"d(D_H)Mean"]]
-		
+
 		self.summary = self.summary.sort_index(axis=0)
 
 	def plotSummary(self):
 
 		df = self.summary
 		fig,(ax1,ax2,ax3) = plt.subplots(3,1,figsize= (6,8),sharex= True)
-		
+
 		ax1.plot(df["Line"],df["H2O_Mean"],'o',color = 'black',markerfacecolor='w')
 		ax1.legend(loc='best')
 		ax1.set_ylim(15000,30000)
@@ -193,13 +195,13 @@ class Isotope(object):
 			c=0
 			k = get_k(i)
 			while c <10:
-					
-				coeffs.append(round(i*k**c,7))			
+
+				coeffs.append(round(i*k**c,7))
 				c+=1
 			return coeffs
 
 		injection = np.arange(0,10,1)
-		coeffs =get_initial_coeffs(0.849029498880193) 
+		coeffs =get_initial_coeffs(0.849029498880193)
 
 		self.coeffs =dict([(i+1,j) for i,j in zip(injection,coeffs)])
 
@@ -241,13 +243,13 @@ class Isotope(object):
 			for loc1 in ["TAP","HAUS1","HAUS2"]:
 				loc2 = "Standard"
 				stds.append(np.array( df.loc[loc1].loc[loc2][col].values))
-		
+
 			std1_0 = df.loc["TAP"].loc["Conditioning"][col].values[-1:]
 			std2_0 =stds[0][-1:]
 			std3_0 = stds[1][-1:]
 
 
-		
+
 			return stds,(std1_0,std2_0,std3_0)
 
 		def F2(x):
@@ -258,16 +260,16 @@ class Isotope(object):
 				for k in range(0,len(x)):
 					xi = i[k]+(1-x[k])*(i[k] - j)
 					temp.append(xi)
-				
-			
-				temp = np.array(temp)	
+
+
+				temp = np.array(temp)
 				val_temp.append(temp)
 			val_temp = np.array(val_temp)
-		
+
 			self.HAUS1_sd = np.std(val_temp[0])
 			self.HAUS2_sd = np.std(val_temp[1])
 			self.TAP_sd = np.std(val_temp[2])
-		
+
 			SD = (self.HAUS1_sd**2+self.HAUS2_sd**2+self.TAP_sd**2)**(0.5)
 
 			return(SD)
@@ -280,16 +282,16 @@ class Isotope(object):
 				for k in range(0,len(x)):
 					xi = i[k]+(1-x[k])*(i[k] - j)
 					temp.append(xi)
-				
-			
-				temp = np.array(temp)	
+
+
+				temp = np.array(temp)
 				val_temp.append(temp)
 			val_temp = np.array(val_temp)
-		
+
 			self.HAUS1_raw_sd = np.std(val_temp[0])
 			self.HAUS2_raw_sd = np.std(val_temp[1])
 			self.TAP_raw_sd = np.std(val_temp[2])
-		
+
 			SD = (self.HAUS1_raw_sd**(0.5)+self.HAUS2_raw_sd**(0.5)+self.TAP_raw_sd**(0.5))**(0.5)
 
 			return(SD)
@@ -325,7 +327,7 @@ class Isotope(object):
 		self.log.append("Done")
 
 
-		
+
 		local = dict([(i,j) for i,j in zip(range(1,len(xnew["x"])+1),xnew["x"])])
 		self.coeffs = local
 		self.combined_raw_sd = F2(x0)
@@ -338,7 +340,7 @@ class Isotope(object):
 			with open(self.dir+'/coeffs{}_{}.csv'.format(iso,self.filename[31:46]), 'w') as coeffFile:
 				writer = csv.writer(coeffFile)
 
-	
+
 				writer.writerows(lines)
 			coeffFile.close()
 
@@ -357,16 +359,16 @@ class Isotope(object):
 		if isotope == "O":
 			col1 = "d(18_16)mem_corrected"
 			col2 = "d(18_16)Mean"
-		else: 
+		else:
 			col1 = "d(D_H)mem_corrected"
 			col2 = "d(D_H)Mean"
-		
+
 		coefficients = [self.coeffs[i] for i in self.coeffs] # coefficients indexed from 1
-		
+
 		def makecoefflist():
 			df = self.corr["Line"]
 			coeffs = [self.coeffs[i] for i in self.coeffs]
-			
+
 			conditioning = df[0:4].values
 			coeff_conditioning = [1,1,1,1]
 
@@ -381,26 +383,26 @@ class Isotope(object):
 			    coeff_samples.append(coeffs[int(i)])
 			new_list =  coeff_conditioning + coeff_standards + coeff_samples
 			return previous,new_list
-		
+
 		previouslines,newlist  = makecoefflist()
-		
+
 		self.corr["coeffs"] = newlist
 		self.corr["previous"] = previouslines
-		
+
 		def correctLine(line):
 
 			line_temp = self.corr.iloc[line]
 			x_orig = line_temp[col2]
 			x_previous = self.corr.iloc[int(line_temp["previous"])-7][col2]
-			
+
 			result= x_orig + (1-line_temp["coeffs"])*(x_orig-x_previous)
-			
+
 			return result
-		
+
 		corrected_values = []
 		for i in range(len(self.corr)):
 			corrected_values.append(correctLine(i))
-			
+
 		self.corr[col1] = corrected_values
 		self.log.append('Successfully corrected values for memory effects')
 		self.memory = self.corr[["key","Line",col2,col1,"Error Code","RUN_ID"]]
@@ -408,7 +410,7 @@ class Isotope(object):
 	def OLSR(self,x,y,lims,ax=None):
 		xi=np.arange(lims[0],lims[1],0.25)
 		slope, intercept, r_value, p_value, std_err = stats.linregress(x,y)
-		
+
 		ax.plot(xi,slope*xi+intercept,color='black',linewidth=0.5)
 		return (ax,(slope,intercept))
 
@@ -450,7 +452,7 @@ class Isotope(object):
 		self.OLSR(x,ytap_corr,(0,10),ax3)[0]
 		ax3.text(posxy[2][0],posxy[2][1],posxy[2][2])
 
-		y = df.iloc[34:38][col1] # for the control run (either W22 or HUSN) 
+		y = df.iloc[34:38][col1] # for the control run (either W22 or HUSN)
 		x =np.arange(1,5)
 		y_corr = df.iloc[34:38][col2]
 		ax4.plot(x,y,'o',color = 'black',markerfacecolor='w')
@@ -484,7 +486,7 @@ class Isotope(object):
 			slope, intercept, r_value, p_value, std_err = stats.linregress(xy["Line"],xy[name])
 
 			return  {'slope':slope,'intercept':intercept}
-		
+
 		self.drift_params = getDriftcorrection(self.drift,isotope)
 
 		df = self.drift
@@ -495,7 +497,7 @@ class Isotope(object):
 			self.drift["d(D_H)drift_corrected"] = self.drift["d(D_H)mem_corrected"]-self.drift["Line"]*self.drift_params["slope"]
 
 
-		
+
 		self.log.append("Successfully corrected for drift")
 
 	def driftCorrPlot(self,isotope = "O"):
@@ -523,13 +525,13 @@ class Isotope(object):
 		ax.plot(xy["Line"],xy[col],
 				'o',
 				color = 'black',
-				markersize = 5, 
+				markersize = 5,
 				markerfacecolor='white',label =" no drift correction")
 
 		ax.plot(xy["Line"],xy[col2],
 				'o',
 				color = 'black',
-				markersize = 5, 
+				markersize = 5,
 				markerfacecolor='black',label="drift corrected")
 
 		ax.legend()
@@ -589,7 +591,7 @@ class Isotope(object):
 			for i,j in zip(xtap,ytap):
 				xvals.append(i)
 				yvals.append(j)
-			
+
 			slope, intercept, r_value, p_value, std_err = stats.linregress(xvals,yvals)
 
 			self.VSMOW_params = {'slope':slope,'intercept':intercept,"xvals":xvals,"yvals":yvals}
@@ -654,17 +656,17 @@ class Isotope(object):
 
 		def getSampleNames(df):
 			return set([i[0] for i in df.index.values])
-		
+
 		def runCheck2(df1,col4):
 			df = df1.copy()
 
 			length = len(df)
-			
+
 			df = df[col4]
-			
-			stds = [] 
+
+			stds = []
 			stds.append((df.std(),"no missing measurements"))
-			
+
 			for i in range(len(df)):
 				statement1 = "missing measurement {}".format((i)%length)
 				stds.append((df.iloc[[i,(i+1)%length,(i+2)%length]].std(),statement1))
@@ -675,7 +677,7 @@ class Isotope(object):
 					stds.append((df.iloc[[i,(i+2)%length]].std(),statement3))
 
 			def checks(mylist):
-				
+
 				if mylist[0][0]<self.constraint:
 					self.log.append("Standard dev is good")
 					print("Standard dev is good")
@@ -686,13 +688,13 @@ class Isotope(object):
 						self.log.append("Standard dev too high get rid of measurement {}".format(val))
 						print("Standard dev too high get rid of measurement {}".format(val))
 						df1.drop(index = val ,level = 1, inplace = True)
-						
+
 					else:
 						conds2 = [(mylist[2][0],2),(mylist[3][0],3),(mylist[5][0],5),(mylist[6][0],6),(mylist[8][0],8),(mylist[10][0],10)]
 						conds_temp = [i[0] for i in conds2]
 						if min(conds_temp) < self.constraint:
 
-							
+
 
 							value= conds_temp.index(min(conds_temp))
 							new_val = conds2[value][1]
@@ -726,7 +728,7 @@ class Isotope(object):
 				if sd_smow >= limit:
 					self.log.append("Warning: high standard deviation on sample {}".format(i))
 
-				
+
 			else:
 				if i == "TAP":
 					dat = df.where(df["Error Code"] == 0)
@@ -758,12 +760,12 @@ class Isotope(object):
 					if sd_smow >= limit:
 						self.log.append("Warning: high standard deviation on sample {}".format(i))
 
-					
-					
+
+
 					js = np.arange(0,3,1)
 					for j in js:
 
-						
+
 						ISO = dat.loc['Control'].iloc[j*4:(j+1)]
 
 						ISOmean = dat.loc["Control"].iloc[j*4:(j+1)*4-1][col1]
@@ -802,7 +804,7 @@ class Isotope(object):
 						if sd_smow >= limit:
 							self.log.append("Warning: high standard deviation on sample {}".format(i))
 
-					
+
 					else:
 						dat = df.where(df["Error Code"] == 0)
 						print("Checking: {} ...".format(i))
@@ -811,7 +813,7 @@ class Isotope(object):
 						key = dat.loc[[i],"key"].dropna()[0]
 						dat = dat.loc[i]
 						dat = runCheck2(dat,col4)
-						
+
 						ISOmean = dat[col1]
 						ISOmem_corr = dat[col2]
 						ISOdrift_corr = dat[col3]
@@ -836,7 +838,7 @@ class Isotope(object):
 					"{} vsmow".format(general_label),
 					"{} stdev. vsmow".format(general_label),
 					"{} counts".format(general_label),
-					"RUN_ID"]) 
+					"RUN_ID"])
 			df.set_index('key', inplace = True)
 			df.sort_index(inplace = True)
 
@@ -938,7 +940,7 @@ class Merged(object):
 
 			return df.where(df["inside GMWL"] == 'outside').dropna()
 
-			
+
 
 		def checkSTDv(df):
 			df1 = df.where(df["d18O stdev. vsmow"]>0.1)
@@ -962,15 +964,15 @@ class Merged(object):
 
 		self.high_std = checkSTDv(self.merge)
 		self.gmwl = CheckGMWL(self.merge)
-		
+
 		print("Checking for triplicates...")
-		
+
 		if len(self.non_triplicate) > 0:
-			
+
 			print("Some samples were not triplicated")
 			print(self.non_triplicate["Identifier 1"])
 			print('\n')
-	
+
 		else:
 
 			print("This was a good run")
@@ -981,7 +983,7 @@ class Merged(object):
 				print("Suggested reruns for following samples, which had high standard deviations")
 				print(self.high_std["Identifier 1"])
 				print('\n')
-				
+
 		else:
 			print("This was a good run")
 			print('\n')
@@ -995,24 +997,39 @@ class Merged(object):
 			print("Nothing to report")
 			print('\n')
 
-			
+
 def Run(iso,filename):
 
 
 	RUN = Isotope(filename)
-	RUN.readRaw()
-	RUN.DummyCheck()
-	RUN.checkEmpty()
-	RUN.checkVolume()
-	RUN.setPrimaryKey()
-	RUN.runSummary()
-	RUN.IsotopeSelect(iso)
-	RUN.initMemCoeffs()
-	RUN.Optimize(iso,method = 'default')
-	RUN.MemoryCorrection(iso)
-	RUN.driftCorrect(iso)
-	RUN.VSMOWcorrect(iso)
-	RUN.getMeanSDs(iso)
+	try:
+		RUN.readRaw()
+		RUN.DummyCheck()
+		RUN.checkEmpty()
+		RUN.checkVolume()
+		RUN.setPrimaryKey()
+		RUN.runSummary()
+		RUN.IsotopeSelect(iso)
+		RUN.initMemCoeffs()
+		RUN.Optimize(iso,method = 'default')
+		RUN.MemoryCorrection(iso)
+		RUN.driftCorrect(iso)
+		RUN.VSMOWcorrect(iso)
+		RUN.getMeanSDs(iso)
+	except:
+		raise
+	#RUN.DummyCheck()
+	#RUN.checkEmpty()
+	#RUN.checkVolume()
+	#RUN.setPrimaryKey()
+	#RUN.runSummary()
+	#RUN.IsotopeSelect(iso)
+	#RUN.initMemCoeffs()
+	#RUN.Optimize(iso,method = 'default')
+	#RUN.MemoryCorrection(iso)
+	#RUN.driftCorrect(iso)
+	#RUN.VSMOWcorrect(iso)
+	#RUN.getMeanSDs(iso)
 	#RUN.checkStandards(iso)
 
 	return RUN
@@ -1101,13 +1118,13 @@ def OverviewDatatoCSV(IsoO,IsoH):
 
 	if os.path.isdir(dir_path) == False:
 		print("Directory does not yet exist.")
-		
+
 		os.makedirs(dir_path)
-		
+
 		print("Writing file")
-		
+
 		merged.to_csv(dir_path+'/data.csv')
-		
+
 		summary.to_csv(dir_path+'/run_summary.csv')
 		writelog()
 
@@ -1134,5 +1151,3 @@ def OverviewDatatoCSV(IsoO,IsoH):
 				print("writing run summary file")
 				summary.to_csv(dir_path+'/run_summary.csv')
 				writelog()
-
-
