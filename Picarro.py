@@ -70,7 +70,7 @@ class Isotope(object):
 	def DummyCheck(self):
 
 		if len(self.raw)>132:
-			print("Your file has 133 lines. I give up now...")
+			raise Exception("Your file has 133 or more lines. I give up now...")
 
 
 	def checkEmpty(self):
@@ -1004,6 +1004,9 @@ def Run(iso,filename):
 	RUN = Isotope(filename)
 	try:
 		RUN.readRaw()
+	except:
+		raise
+	try:
 		RUN.DummyCheck()
 		RUN.checkEmpty()
 		RUN.checkVolume()
@@ -1016,23 +1019,9 @@ def Run(iso,filename):
 		RUN.driftCorrect(iso)
 		RUN.VSMOWcorrect(iso)
 		RUN.getMeanSDs(iso)
+		return RUN
 	except:
 		raise
-	#RUN.DummyCheck()
-	#RUN.checkEmpty()
-	#RUN.checkVolume()
-	#RUN.setPrimaryKey()
-	#RUN.runSummary()
-	#RUN.IsotopeSelect(iso)
-	#RUN.initMemCoeffs()
-	#RUN.Optimize(iso,method = 'default')
-	#RUN.MemoryCorrection(iso)
-	#RUN.driftCorrect(iso)
-	#RUN.VSMOWcorrect(iso)
-	#RUN.getMeanSDs(iso)
-	#RUN.checkStandards(iso)
-
-	return RUN
 
 
 
