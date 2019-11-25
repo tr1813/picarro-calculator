@@ -282,3 +282,23 @@ def checkforrawdata(path_to_watch):
 		print('Added all existing files in directory',path_to_watch)
 		print('Existing files:',newfile)
 		return newfile
+
+
+def ReplaceName(conn,RUN_ID,newname):
+    """ create a table from the create_table_sql statement
+    :param conn: Connection object
+    :param RUN_ID: the run id, an eight digit integer with format yyyymmdd
+	:param newname: the new nick name
+    """
+    
+    statement= """UPDATE runlookup
+    SET RUN_ID = {0}, NickName = '{1}'
+    WHERE RUN_ID = {0};""".format(RUN_ID,newname)
+    
+    try:
+        c = conn.cursor()
+
+        c.execute(statement)
+    except Error as e:
+            print(e)
+        conn.commit()
