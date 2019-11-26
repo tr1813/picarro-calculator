@@ -381,6 +381,8 @@ def plotStandardagainstTime(standard, date,conn):
 	defined_H= {"HAUS1":3.7,"HAUS2":-229.8,"TAP":-95.2}
 
 	df = pd.read_sql_query(statement,conn)
+	df.sort_values("RUN_ID",inplace = True)
+	print(df.head())
 
 	fig,(axO,axH) = plt.subplots(1,2, figsize=(10,4),sharey=True)
 
@@ -391,7 +393,7 @@ def plotStandardagainstTime(standard, date,conn):
 
 	for ax,iso,defs in zip((axO,axH),("d18O vsmow","d2H vsmow"),(defined_O,defined_H)):
 
-		ax.hist(df[iso],bins=30,color= "black",alpha = 0.75)
+		ax.hist(df[iso],bins=25,color= "black",alpha = 0.75)
 		ax.set_xlim(df[iso].mean()-3*df[iso].std(),df[iso].mean()+3*df[iso].std())
 		ax.axvline(x=thisrun[iso].mean(), color = "red",label="selected day")
 		ax.axvline(x=defs[standard], color = "blue",label="defined value")
