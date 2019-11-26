@@ -908,6 +908,7 @@ class Merged(object):
 		self.high_std = None
 		self.gmwl = None
 		self.nickname = None
+		self.fullrerun = None
 
 	def setMerge(self,O18,D):
 		self.O18 = O18
@@ -932,7 +933,7 @@ class Merged(object):
 	def setNickName(self):
 			self.nickname = str(input("""Please set the run's nickname:  \n
 			Suggested format: YYYY DD MM UserInitials RunName RunNumber \n
-			Example: 2000 01 01 CDG Paris Run01\n """))
+			Example: 2000 01 01 CDG Paris Run01\n \n """))
 
 
 	def suggestedReruns(self):
@@ -1012,6 +1013,13 @@ class Merged(object):
 		else:
 			print("Nothing to report")
 			print('\n')
+
+	def setFullRerun(self):
+		reruns = self.high_std.append(self.non_triplicate)
+		reruns = reruns.append(self.gmwl)
+
+		self.fullrerun = reruns[~reruns.index.duplicated(keep='last')]
+		self.fullrerun.set_index(["Identifier 1", "Identifier 2"], inplace = True)
 
 def RunFromDB(by=None,date=None,name=None,run_num=None,conn=None,iso="O"):
 
@@ -1097,7 +1105,7 @@ def FullRun(filename = None,name=None,run_num=None,conn=None, date = None, by= N
 
 	run.setMerge(O,D)
 
-	for f in (run.setCoeffs,run.TrimStandards,run.suggestedReruns):
+	for f in (run.setCoeffs,run.TrimStandards,run.suggestedReruns,run.setFullRerun):
 		f()
 
 	return run

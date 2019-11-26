@@ -302,10 +302,26 @@ def ReplaceName(conn,RUN_ID,newname):
             print(e)
     conn.commit()
 
+def writetoExcel(frun,path):
+	writer = pd.ExcelWriter("{0}\Pycarro Results {1}.xlsx".format(path,frun.nickname))
+
+	mydict = {'summary sample data':frun.trimmed,
+	'samples to rerun':frun.fullrerun,
+	'summary run data':frun.merge,
+	'O18 corrected':frun.O18.vsmow,
+	'D corrected':frun.D.vsmow,
+	'raw data':frun.O18.raw}
+
+	for df in mydict:
+		mydict[df].to_excel(writer,df,float_format="%.2f")
+	frun.coeffs.to_excel(writer,'memory coefficients',float_format="%.4f")
+	writer.save()
+
 
 def FullRunUpdate(filename):
 
 	PATH = r"J:\c715\Picarro\Results\Database\data.db"
+	results_path = r"J:\c715\Picarro\Results\Results 2019\Pycarro"
 
 	conn_local = CreateConnection(PATH)
 
@@ -318,6 +334,8 @@ def FullRunUpdate(filename):
 
 	# Add Nickname to Run look up table
 	AddRun(filename,frun.nickname,conn_local)
+
+	writetoExcel(frun,results_path)
 
 	return frun
 
