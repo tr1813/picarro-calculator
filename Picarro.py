@@ -51,6 +51,11 @@ class Isotope(object):
 	def Log(self):
 		for i in self.log:
 			print(i+"\n")
+
+
+
+
+
 	def readRaw(self,filename):
 		self.filename = filename
 		df = pd.read_csv(self.filename)
@@ -141,7 +146,7 @@ class Isotope(object):
 		df = self.summary
 		fig,(ax1,ax2,ax3) = plt.subplots(3,1,figsize= (6,8),sharex= True)
 
-		ax1.plot(df["Line"],df["H2O_Mean"],'o',color = 'black',markerfacecolor='w')
+		ax1.plot(df["Line"],df["H2O_Mean"],'o',color = 'black',markerfacecolor='w', label="Injection Volumes")
 		ax1.legend(loc='best')
 		ax1.set_ylim(15000,30000)
 		ax1.set_ylabel("H2O in ppmV")
@@ -149,15 +154,15 @@ class Isotope(object):
 		ax1.fill_between(np.arange(-2,133,1),17000,23000,color='red',alpha=0.5)
 		ax1.set_xlim(0,132)
 
-		ax2.plot(df["Line"],df["d(18_16)Mean"],'o',color = 'black',markerfacecolor='w')
+		ax2.plot(df["Line"],df["d(18_16)Mean"],'o',color = 'black',markerfacecolor='w',label= "Raw values")
 		ax2.legend(loc='best')
 		ax2.set_ylim(-50,10)
-		ax2.set_ylabel("d18O in permil")
+		ax2.set_ylabel("$\delta^{18}O$ permil [VSMOW]")
 
-		ax3.plot(df["Line"],df["d(D_H)Mean"],'o',color = 'black',markerfacecolor='w')
+		ax3.plot(df["Line"],df["d(D_H)Mean"],'o',color = 'black',markerfacecolor='w',label= "Raw values")
 		ax3.legend(loc='best')
 		ax3.set_ylim(-300,50)
-		ax3.set_ylabel("d2H in permil")
+		ax3.set_ylabel("$\delta^{18}O$ permil [VSMOW]")
 		ax3.set_xlabel("Analysis line")
 
 
@@ -244,9 +249,9 @@ class Isotope(object):
 			stds=[]
 			for loc1 in ["TAP","HAUS1","HAUS2"]:
 				loc2 = "Standard"
-				stds.append(np.array( df.loc[loc1].loc[loc2][col].values))
+				stds.append(np.array(df.loc[(loc1,loc2),col].values))
 
-			std1_0 = df.loc["TAP"].loc["Conditioning"][col].values[-1:]
+			std1_0 = df.loc[("TAP","Conditioning"),col].values[-1:]
 			std2_0 =stds[0][-1:]
 			std3_0 = stds[1][-1:]
 
@@ -902,6 +907,7 @@ class Merged(object):
 		self.non_perfect = None
 		self.high_std = None
 		self.gmwl = None
+		self.nickname = None
 
 	def setMerge(self,O18,D):
 		self.O18 = O18
@@ -922,6 +928,12 @@ class Merged(object):
 			df = df[df["Identifier 1"] !=i]
 
 		self.trimmed = df
+
+	def setNickName(self):
+			self.nickname = str(input("""Please set the run's nickname:  \n
+			Suggested format: YYYY DD MM UserInitials RunName RunNumber \n
+			Example: 2000 01 01 CDG Paris Run01\n """))
+
 
 	def suggestedReruns(self):
 
@@ -1001,66 +1013,70 @@ class Merged(object):
 			print("Nothing to report")
 			print('\n')
 
-def RunFromDB(by=None,date=None,name=None,run=None,conn=None,iso="O"):
+def RunFromDB(by=None,date=None,name=None,run_num=None,conn=None,iso="O"):
+
+	run = Isotope()
+	run.raw = getRawData(by=by,date=date,name=name,run=run_num,conn=conn)
+
 	def DummyCheck2(df):
+		"""Checks the length of the dataframe,
+		If longer than 132 lines, returns an exception"""
+
 		if len(df) >132:
 			raise Exception("The dataframe contains more than 132 lines. Please narrow down the search. Quitting...")
-	ISO = Isotope()
-	ISO.raw = getRawData(by=by,date=date,name=name,run=run,conn=conn)
+
 	try:
-		DummyCheck2(ISO.raw)
-		ISO.checkEmpty()
-		ISO.checkVolume()
-		ISO.setPrimaryKey()
-		ISO.runSummary()
+		DummyCheck2(run.raw)
 	except:
 		raise
 
-	ISO.IsotopeSelect(iso)
-	ISO.initMemCoeffs()
-	ISO.Optimize(iso,method = 'default')
-	ISO.MemoryCorrection(iso)
-	ISO.driftCorrect(iso)
-	ISO.VSMOWcorrect(iso)
-	ISO.getMeanSDs(iso)
-	return ISO
+	# Makes all the other checks and produces a run summary
+	for f in (run.checkEmpty,run.checkVolume,run.setPrimaryKey,run.runSummary):
+		f()
 
 
+	run.IsotopeSelect(iso)
+	run.initMemCoeffs()
+	run.Optimize(iso,method = 'default')
+	# Finish by computing all the corrections
+	for f in (run.MemoryCorrection,run.driftCorrect,run.VSMOWcorrect,run.getMeanSDs):
+		f(iso)
+
+	return run
 
 def Run(iso,filename):
 
 	try:
-		RUN = Isotope()
-		RUN.readRaw(filename)
-		RUN.DummyCheck()
-		RUN.checkEmpty()
-		RUN.checkVolume()
-		RUN.setPrimaryKey()
-		RUN.runSummary()
+		run = Isotope()
+		run.readRaw(filename)
+		for f in (run.DummyCheck,run.checkEmpty,run.checkVolume,run.setPrimaryKey,run.runSummary):
+			f()
 	except:
 		raise
 
-	RUN.IsotopeSelect(iso)
-	RUN.initMemCoeffs()
-	RUN.Optimize(iso,method = 'default')
-	RUN.MemoryCorrection(iso)
-	RUN.driftCorrect(iso)
-	RUN.VSMOWcorrect(iso)
-	RUN.getMeanSDs(iso)
+	run.IsotopeSelect(iso)
+	run.initMemCoeffs()
+	run.Optimize(iso,method = 'default')
 
-	return RUN
+	for f in (run.MemoryCorrection,run.driftCorrect,run.VSMOWcorrect,run.getMeanSDs):
+		f(iso)
 
+	return run
 
-def FullRun(filename = None,name=None,run=None,conn=None, date = None, by= None):
+def FullRun(filename = None,name=None,run_num=None,conn=None, date = None, by= None):
+
+	run = Merged()
 
 	if filename is not None:
 
+		run.setNickName()
+
 		print("Running the corrections for Oxygen \n ... \n ...")
-		X = Run(iso= "O",filename=filename)
+		O = Run(iso= "O",filename=filename)
 		print('Done! \n ... \n ...\n ... \n ...')
 
 		print("Running the corrections for Deuterium \n ... \n ...")
-		Y =Run(iso="H",filename=filename)
+		D =Run(iso="H",filename=filename)
 		print('Done!')
 
 		#OverviewDatatoCSV(X,Y)
@@ -1068,27 +1084,23 @@ def FullRun(filename = None,name=None,run=None,conn=None, date = None, by= None)
 
 	else:
 		print("Running the corrections for Oxygen \n ... \n ...")
-		X = RunFromDB(date = date,by=by,name=name,run=run,conn=conn,iso = "O")
+		O = RunFromDB(date = date,by=by,name=name,run_num=run_num,conn=conn,iso = "O")
+		run.nickname = O.raw["NickName"].values[0]
 		print('Done! \n ... \n ...\n ... \n ...')
 
 		print("Running the corrections for Deuterium \n ... \n ...")
-		Y = RunFromDB(date = date,by=by,name=name,run=run,conn=conn,iso = "H")
+		D = RunFromDB(date = date,by=by,name=name,run_num=run_num,conn=conn,iso = "H")
 		print('Done!')
 
 		#OverviewDatatoCSV(X,Y)
 		print("now merging the O and H isotope data \n ... \n ...")
 
+	run.setMerge(O,D)
 
+	for f in (run.setCoeffs,run.TrimStandards,run.suggestedReruns):
+		f()
 
-	Z = Merged()
-	Z.setMerge(X,Y)
-	Z.setCoeffs()
-	Z.TrimStandards()
-	Z.suggestedReruns()
-
-	return Z
-
-
+	return run
 
 def Merge(IsoO,IsoH):
 
@@ -1099,17 +1111,13 @@ def Merge(IsoO,IsoH):
 
 	return df
 
-
-
-
-def OverviewPlot(Z):
-
+def OverviewPlot(frun):
 
 	fig,ax = plt.subplots()
-	xi = Z.trimmed["d18O vsmow"]
-	yi = Z.trimmed["d2H vsmow"]
-	xi_err = Z.trimmed["d18O stdev. vsmow"]
-	yi_err = Z.trimmed["d2H stdev. vsmow"]
+
+	# Plotting the corrected values for each measured sample of the run
+	xi,yi = frun.trimmed["d18O vsmow"],frun.trimmed["d2H vsmow"]
+	xi_err,yi_err  = frun.trimmed["d18O stdev. vsmow"],frun.trimmed["d2H stdev. vsmow"]
 	ax.plot(xi,yi,'o',label="results")
 	ax.errorbar(xi,yi,yerr = yi_err  ,xerr= xi_err,
 			marker = '.',
@@ -1118,20 +1126,22 @@ def OverviewPlot(Z):
 			elinewidth = 1,
 			ecolor = 'black',label="error")
 
-	x = np.arange(ax.get_xlim()[0]-1,ax.get_xlim()[1]+1,0.1)
+
 	ax.set_xlim(ax.get_xlim()[0],ax.get_xlim()[1])
-	ax.set(xlabel="$\delta^{18}$O [‰] (VSMOW)",ylabel="$\delta^{2}$H [‰] (VSMOW)")
+
+	# Plotting the Global Meteoric Water line
+	x = np.arange(ax.get_xlim()[0]-1,ax.get_xlim()[1]+1,0.1)
 	ax.plot(x,x*8+10,label='GMWL')
 	ax.fill_between(x,x*8+2,x*8+18,alpha = 0.5,color = "orange")
 
+	ax.set(xlabel="$\delta^{18}$O [‰] (VSMOW)",ylabel="$\delta^{2}$H [‰] (VSMOW)")
+	ax.tick_params(direction='in',top=True,right=True)
 	ax.legend()
 	ax.grid()
 
-	ax.tick_params(direction='in',top=True,right=True)
-	plt.title("Dual Isotope space plot of Results")
+	plt.title("Dual Isotope space plot of Results \n {}".format(frun.nickname))
 	plt.tight_layout()
 	plt.show()
-
 
 def OverviewDatatoCSV(IsoO,IsoH):
 	dir_path = IsoO.getDir()
@@ -1186,7 +1196,7 @@ def OverviewDatatoCSV(IsoO,IsoH):
 def getRawData(conn,by,date=None,name=None,run=None):
 	if by == 'keyword':
 		statement = """SELECT r.'Analysis',r.'Line',r.'Identifier 1',r.'Identifier 2',r.'Inj Nr',
-	    	r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean'
+	    	r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean',rlk.NickName
 	    	from rawrun r, runlookup rlk
 	    	WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
 		df = pd.read_sql_query(statement,conn)

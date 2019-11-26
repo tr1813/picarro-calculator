@@ -50,7 +50,7 @@ def CreateTable(conn,statement):
 	except Error as e:
 		print(e)
 
-def AddSummaryRun(filename,conn):
+def AddSummaryRun(run,conn):
 
 	statement = """CREATE TABLE runs
 		('key' int,
@@ -70,7 +70,6 @@ def AddSummaryRun(filename,conn):
 		"""
 	CreateTable(conn,statement)
 
-	RUN = pica.FullRun(filename)
 
 	c = conn.cursor()
 	def getrows(df):
@@ -80,7 +79,7 @@ def AddSummaryRun(filename,conn):
 			rows.append(tuple([i]+list(j)))
 		return rows
 
-	rows = getrows(RUN.merge)
+	rows = getrows(run.merge)
 	sql ="""INSERT INTO runs
 			('key',
 			'Identifier 1',
@@ -290,11 +289,11 @@ def ReplaceName(conn,RUN_ID,newname):
     :param RUN_ID: the run id, an eight digit integer with format yyyymmdd
 	:param newname: the new nick name
     """
-    
+
     statement= """UPDATE runlookup
     SET RUN_ID = {0}, NickName = '{1}'
     WHERE RUN_ID = {0};""".format(RUN_ID,newname)
-    
+
     try:
         c = conn.cursor()
 
@@ -302,7 +301,29 @@ def ReplaceName(conn,RUN_ID,newname):
     except Error as e:
             print(e)
     conn.commit()
-		
+
+
+def FullRunUpdate(filename):
+
+	PATH = r"J:\c715\Picarro\Results\Database\data.db"
+
+	conn_local = CreateConnection(PATH)
+
+	# Add raw files to database
+	AddRaw(filename,conn_local)
+
+	# Add corrected values to database, automatically does the optimization procedure
+	frun = pica.FullRun(filename)
+	AddSummaryRun(frun,conn_local)
+
+	# Add Nickname to Run look up table
+	AddRun(filename,frun.nickname,conn_local)
+
+	return frun
+
+
+
+
 ### In case the database is rebuilt, and the run look up table needs to be done again, uncomment the next bit of code.
 
 
@@ -318,7 +339,7 @@ def ReplaceName(conn,RUN_ID,newname):
 #    #print(full)
 #    if full.startswith(" 2019") == True:
 #        nicknames.append(full)
-    
+
 #RUN_IDS = glob.glob(r"J:\c715\Picarro\Results\Results 2019\Raw data\*.csv")
 
 #for i,j in zip(nicknames,RUN_IDS):
