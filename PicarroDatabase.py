@@ -301,7 +301,7 @@ def ReplaceName(conn,RUN_ID,newname):
         c.execute(statement)
     except Error as e:
             print(e)
-        conn.commit()
+    conn.commit()
 		
 ### In case the database is rebuilt, and the run look up table needs to be done again, uncomment the next bit of code.
 

@@ -18,10 +18,10 @@ import time
 class Isotope(object):
 	"""docstring for Isotope
 	A object of data"""
-	def __init__(self,filename):
+	def __init__(self):
 
-		self.filename = filename
-		self.dir = "../../Picarro_data/PICARRO_run_"+self.filename[31:46]
+		self.filename = None
+		self.dir = None
 		self.log = []
 		self.raw = None
 		self.noempty = None
@@ -51,7 +51,8 @@ class Isotope(object):
 	def Log(self):
 		for i in self.log:
 			print(i+"\n")
-	def readRaw(self):
+	def readRaw(self,filename):
+		self.filename = filename
 		df = pd.read_csv(self.filename)
 
 		renamed = dict([(i,i.strip()) for i in df]) # strip white space from column names
@@ -214,16 +215,17 @@ class Isotope(object):
 
 
 	def Optimize(self,isotope="O",method = 'default'):
+		#self.dir = "../../Picarro_data/PICARRO_run_"+self.run_id
 
 		self.log.append("Checking a coeffs whether a coeffs file already exists")
 
-		if os.path.isdir(self.dir)==False:
-			print('creating a directory to store the data')
-			os.makedirs(self.dir)
-			if os.path.isfile(self.dir+"/coeffs{}_{}.csv".format(isotope,self.filename[31:46]))==True:
-				self.log.append("coeffs file already exists!")
-		else:
-			self.log.append("coeffs file does not exist yet. Switch to Optimization...")
+		#if os.path.isdir(self.dir)==False:
+			#print('creating a directory to store the data')
+			#os.makedirs(self.dir)
+			#if os.path.isfile(self.dir+"/coeffs{}_{}.csv".format(isotope,self.filename[31:46]))==True:
+				#self.log.append("coeffs file already exists!")
+		#else:
+			#self.log.append("coeffs file does not exist yet. Switch to Optimization...")
 
 
 
@@ -635,6 +637,7 @@ class Isotope(object):
 	def getMeanSDs(self,isotope = "O"):
 
 		df = self.vsmow.copy()
+		self.run_id = self.vsmow["RUN_ID"].values[0]
 
 		if isotope == "O":
 			col1="d(18_16)Mean"
@@ -887,12 +890,12 @@ class Isotope(object):
 class Merged(object):
 	"""docstring for Isotope
 	A object of data"""
-	def __init__(self,O18,D):
+	def __init__(self):
 
 		self.merge = None
 		self.trimmed = None
-		self.O18 = O18
-		self.D = D
+		self.O18 = None
+		self.D = None
 		self.coeffs = None
 		self.non_replicate = None
 		self.non_triplicate = None
@@ -900,8 +903,9 @@ class Merged(object):
 		self.high_std = None
 		self.gmwl = None
 
-	def setMerge(self):
-
+	def setMerge(self,O18,D):
+		self.O18 = O18
+		self.D = D
 		self.merge = Merge(self.O18,self.D)
 
 	def setCoeffs(self):
@@ -997,56 +1001,94 @@ class Merged(object):
 			print("Nothing to report")
 			print('\n')
 
+def RunFromDB(by=None,date=None,name=None,run=None,conn=None,iso="O"):
+	def DummyCheck2(df):
+		if len(df) >132:
+			raise Exception("The dataframe contains more than 132 lines. Please narrow down the search. Quitting...")
+	ISO = Isotope()
+	ISO.raw = getRawData(by=by,date=date,name=name,run=run,conn=conn)
+	try:
+		DummyCheck2(ISO.raw)
+		ISO.checkEmpty()
+		ISO.checkVolume()
+		ISO.setPrimaryKey()
+		ISO.runSummary()
+	except:
+		raise
+
+	ISO.IsotopeSelect(iso)
+	ISO.initMemCoeffs()
+	ISO.Optimize(iso,method = 'default')
+	ISO.MemoryCorrection(iso)
+	ISO.driftCorrect(iso)
+	ISO.VSMOWcorrect(iso)
+	ISO.getMeanSDs(iso)
+	return ISO
+
+
 
 def Run(iso,filename):
 
-
-	RUN = Isotope(filename)
 	try:
-		RUN.readRaw()
-	except:
-		raise
-	try:
+		RUN = Isotope()
+		RUN.readRaw(filename)
 		RUN.DummyCheck()
 		RUN.checkEmpty()
 		RUN.checkVolume()
 		RUN.setPrimaryKey()
 		RUN.runSummary()
-		RUN.IsotopeSelect(iso)
-		RUN.initMemCoeffs()
-		RUN.Optimize(iso,method = 'default')
-		RUN.MemoryCorrection(iso)
-		RUN.driftCorrect(iso)
-		RUN.VSMOWcorrect(iso)
-		RUN.getMeanSDs(iso)
-		return RUN
 	except:
 		raise
 
+	RUN.IsotopeSelect(iso)
+	RUN.initMemCoeffs()
+	RUN.Optimize(iso,method = 'default')
+	RUN.MemoryCorrection(iso)
+	RUN.driftCorrect(iso)
+	RUN.VSMOWcorrect(iso)
+	RUN.getMeanSDs(iso)
+
+	return RUN
 
 
-def FullRun(filename):
+def FullRun(filename = None,name=None,run=None,conn=None, date = None, by= None):
+
+	if filename is not None:
+
+		print("Running the corrections for Oxygen \n ... \n ...")
+		X = Run(iso= "O",filename=filename)
+		print('Done! \n ... \n ...\n ... \n ...')
+
+		print("Running the corrections for Deuterium \n ... \n ...")
+		Y =Run(iso="H",filename=filename)
+		print('Done!')
+
+		#OverviewDatatoCSV(X,Y)
+		print("now merging the O and H isotope data \n ... \n ...")
+
+	else:
+		print("Running the corrections for Oxygen \n ... \n ...")
+		X = RunFromDB(date = date,by=by,name=name,run=run,conn=conn,iso = "O")
+		print('Done! \n ... \n ...\n ... \n ...')
+
+		print("Running the corrections for Deuterium \n ... \n ...")
+		Y = RunFromDB(date = date,by=by,name=name,run=run,conn=conn,iso = "H")
+		print('Done!')
+
+		#OverviewDatatoCSV(X,Y)
+		print("now merging the O and H isotope data \n ... \n ...")
 
 
 
-	print("Running the corrections for Oxygen \n ... \n ...")
-	X = Run("O",filename)
-	print('Done! \n ... \n ...\n ... \n ...')
-
-	print("Running the corrections for Deuterium \n ... \n ...")
-	Y =Run("H",filename)
-	print('Done!')
-
-	#OverviewDatatoCSV(X,Y)
-	print("now merging the O and H isotope data \n ... \n ...")
-
-	Z = Merged(X,Y)
-	Z.setMerge()
+	Z = Merged()
+	Z.setMerge(X,Y)
 	Z.setCoeffs()
 	Z.TrimStandards()
 	Z.suggestedReruns()
 
 	return Z
+
+
 
 def Merge(IsoO,IsoH):
 
@@ -1140,3 +1182,60 @@ def OverviewDatatoCSV(IsoO,IsoH):
 				print("writing run summary file")
 				summary.to_csv(dir_path+'/run_summary.csv')
 				writelog()
+
+def getRawData(conn,by,date=None,name=None,run=None):
+	if by == 'keyword':
+		statement = """SELECT r.'Analysis',r.'Line',r.'Identifier 1',r.'Identifier 2',r.'Inj Nr',
+	    	r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean'
+	    	from rawrun r, runlookup rlk
+	    	WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
+		df = pd.read_sql_query(statement,conn)
+	else:
+		if by == 'date':
+			statement = """SELECT r.'Analysis',r.'Line',r.'Identifier 1',r.'Identifier 2',r.'Inj Nr',
+	    	r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean'
+	    	from rawrun r, runlookup rlk
+	    	WHERE (r.RUN_ID = {} and r.RUN_ID = rlk.RUN_ID);""".format(date)
+			df = pd.read_sql_query(statement,conn)
+		else:
+			raise Exception("by= must be either date (format: yyyymmdd) or keyword")
+
+	df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
+	df["Identifier 2"] = [i.strip() for i in df["Identifier 2"].values]
+	df["Line"] = [int(i) for i in df["Line"]]
+	df.set_index(["Identifier 1","Identifier 2","Inj Nr"], inplace = True)
+
+	return df
+
+def getCorrectedFromDB(conn,by,date=None,name=None,run=None):
+	if by == 'keyword':
+		statement = """SELECT r.'key',r.'Identifier 1',r.'Identifier 2',r.'RUN_ID',r.'position',
+    	r.'d18O vsmow',r.'d18O stdev. vsmow',r.'d18O counts',
+    	r.'d2H vsmow',r.'d2H stdev. vsmow',r.'d2H counts',rlk.NickName
+    	from runs r, runlookup rlk
+    	WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
+		df = pd.read_sql_query(statement,conn)
+	else:
+		if by == 'date':
+			statement =  """SELECT r.'key',r.'Identifier 1',r.'Identifier 2',r.'RUN_ID',r.'position',
+    		r.'d18O vsmow',r.'d18O stdev. vsmow',r.'d18O counts',
+    		r.'d2H vsmow',r.'d2H stdev. vsmow',r.'d2H counts',rlk.NickName
+    		from runs r, runlookup rlk
+    		WHERE (r.RUN_ID = {} and r.RUN_ID = rlk.RUN_ID);""".format(date)
+			df = pd.read_sql_query(statement,conn)
+		else:
+			raise Exception("by= must be either date (format: yyyymmdd) or keyword")
+
+	df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
+	df["Identifier 2"] = [i.strip() for i in df["Identifier 2"].values]
+	df.set_index(["key"], inplace = True)
+	ls = ["HAUS1", "HAUS2", "TAP", "W22","HUSN"]
+	for i in ls:
+		df = df[df["Identifier 1"] !=i]
+
+	return df
+
+def PlotRunFromDB(conn,by,date=None,name=None,run=None):
+	X = Merged()
+	X.trimmed = getCorrectedFromDB(conn,by,date=date,name=name,run=run)
+	OverviewPlot(X)
