@@ -2,7 +2,7 @@
 # -*- coding: latin-1 -*-
 
 import sys; sys.path
-
+from datetime import date
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -12,6 +12,8 @@ import sqlite3
 import glob
 from sqlite3 import Error
 import pickle
+from pandas.plotting import register_matplotlib_converters
+register_matplotlib_converters()
 
 
 
@@ -319,7 +321,7 @@ def writetoExcel(frun,path):
 
 
 def FullRunUpdate(filename):
-
+	print(filename)
 	PATH = r"J:\c715\Picarro\Results\Database\data.db"
 	results_path = r"J:\c715\Picarro\Results\Results 2019\Pycarro"
 
@@ -339,7 +341,67 @@ def FullRunUpdate(filename):
 
 	return frun
 
+def pastInjectionsPlot(conn,start):
+	df = pd.read_sql_query("select rr.'H2O_Mean',rr.'Time Code' from rawrun rr;",conn)
+	df= df.where(df["H2O_Mean"] != "              ").dropna()
+	df.set_index("Time Code", inplace = True)
+	df.index = pd.to_datetime(df.index)
+	pd.to_numeric(df["H2O_Mean"])
 
+	xi = pd.date_range(start=start, end=date.today(), freq='D')
+	upr = np.ones(len(xi))*23000
+	lwr = np.ones(len(xi))*17000
+
+	fig,ax = plt.subplots(figsize=(10,5))
+
+
+	ax.fill_between(xi,lwr,upr,color='teal',alpha=0.25,label="accepted")
+	ax.plot(df["H2O_Mean"],"o",markersize= 2,color= "blue",lw=0.25,label="injection volumes")
+
+	ax.legend(loc='best')
+	ax.grid()
+	ax.set_xlim(start,date.today())
+	ax.set_ylabel("Injection Volume ppmV")
+	ax.set_xlabel("Analysis number")
+	plt.tight_layout()
+	plt.show()
+
+def getMetrics(date,conn):
+
+    for std in ["TAP","HAUS1","HAUS2"]:
+        plotStandardagainstTime(std,date,conn)
+
+def plotStandardagainstTime(standard, date,conn):
+	int_date = int(date.replace("-",""))
+	statement = """select r.'Identifier 1',r.'d18O vsmow',r.'d2H vsmow',r.'RUN_ID'
+	from runs r where (r.'Identifier 1'= '{}' and
+	r.'RUN_ID'>{});""".format(standard,int_date - 10000)
+
+	defined_O = {"HAUS1":0.6,"HAUS2":-29.88,"TAP":-13.4}
+	defined_H= {"HAUS1":3.7,"HAUS2":-229.8,"TAP":-95.2}
+
+	df = pd.read_sql_query(statement,conn)
+
+	fig,(axO,axH) = plt.subplots(1,2, figsize=(10,4),sharey=True)
+
+
+
+
+	thisrun = df.where(df["RUN_ID"] == int_date).dropna()
+
+	for ax,iso,defs in zip((axO,axH),("d18O vsmow","d2H vsmow"),(defined_O,defined_H)):
+
+		ax.hist(df[iso],bins=30,color= "black",alpha = 0.75)
+		ax.set_xlim(df[iso].mean()-3*df[iso].std(),df[iso].mean()+3*df[iso].std())
+		ax.axvline(x=thisrun[iso].mean(), color = "red",label="selected day")
+		ax.axvline(x=defs[standard], color = "blue",label="defined value")
+		ax.set_xlabel("{0}".format(iso,date))
+		ax.set_ylabel("counts")
+		ax.legend()
+
+
+	fig.suptitle("{} at date {}".format(standard,date))
+	plt.show()
 
 
 ### In case the database is rebuilt, and the run look up table needs to be done again, uncomment the next bit of code.
