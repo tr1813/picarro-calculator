@@ -103,7 +103,7 @@ class Isotope(object):
 	def checkVolume(self):
 
 		conds = [self.noempty.H2O_Mean.values < 17000 , self.noempty.H2O_Mean.values > 23000]	# create the conditions for ignoring a certain analysis line
-		choices = [1, 2]													# what the error code value will become
+		choices = [1, 1]													# what the error code value will become
 
 		out = np.select(conds, choices, default=0)							# mapping the error code on the conditions
 
@@ -818,20 +818,28 @@ class Isotope(object):
 						print("Checking: {} ...".format(i))
 						self.log.append("Checking: {} ...".format(i))
 
-						key = dat.loc[[i],"key"].dropna()[0]
-						dat = dat.loc[i]
-						dat = runCheck2(dat,col4)
+						if df.loc[i]["Error Code"].sum()==4:
+							key = df.loc[i]["key"].values[0]
+							nan = float("nan")
+							val.append((key,i,df.loc[i].index.values[0][0],nan,nan,nan,nan,nan,nan,nan,nan,0,self.run_id))
+						else:
+							key = dat.loc[[i],"key"].dropna()[0]
+							dat = dat.loc[i]
+							dat = runCheck2(dat,col4)
 
-						ISOmean = dat[col1]
-						ISOmem_corr = dat[col2]
-						ISOdrift_corr = dat[col3]
-						ISOvsmow_corr = dat[col4]
-						count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
-						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
-						val.append((key,i,dat.index.values[0][0],ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
-						print(key)
-						if sd_smow >= limit:
-							self.log.append("Warning: high standard deviation on sample {}".format(i))
+							ISOmean = dat[col1]
+							ISOmem_corr = dat[col2]
+							ISOdrift_corr = dat[col3]
+							ISOvsmow_corr = dat[col4]
+							count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
+							sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
+							val.append((key,i,dat.index.values[0][0],ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
+							print(key)
+							if sd_smow >= limit:
+								self.log.append("Warning: high standard deviation on sample {}".format(i))
+
+
+
 
 		def runOverview():
 
@@ -963,16 +971,16 @@ class Merged(object):
 			df1 = df.where(df["d18O stdev. vsmow"]>0.1)
 			df2 = df.where(df["d2H stdev. vsmow"]>0.8)
 
-			df3 = df1.dropna().append(df2.dropna()).drop_duplicates()
+			df3 = df1.append(df2).drop_duplicates().dropna(how='all')
 
 			return df3
 
 
 		def checkCount(df,thresh):
 
-			df1 = df.where(df["d18O counts"]<=2)
-			df2 = df.where(df["d2H counts"]<=2)
-			df3 = df1.dropna().append(df2.dropna()).drop_duplicates()
+			df1 = df.where(df["d18O counts"]<=thresh)
+			df2 = df.where(df["d2H counts"]<=thresh)
+			df3 = df1.append(df2).drop_duplicates().dropna(how='all')
 
 			return df3
 
