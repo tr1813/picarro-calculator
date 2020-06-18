@@ -8,7 +8,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import stats
 from math import exp,log,sqrt
-from scipy.optimize import minimize,differential_evolution
+from scipy.optimize import minimize,differential_evolution,fmin_slsqp
 import os
 import csv
 import datetime
@@ -247,16 +247,17 @@ class Isotope(object):
 		def getAllcoeffs(df):
 			df = df
 			stds=[]
-			for loc1 in ["TAP","HAUS1","HAUS2"]:
+			for loc1 in ["HAUS1","HAUS2","TAP"]:
 				loc2 = "Standard"
 				stds.append(np.array(df.loc[(loc1,loc2),col].values))
+
 
 			std1_0 = df.loc[("TAP","Conditioning"),col].values[-1:]
 			std2_0 =stds[0][-1:]
 			std3_0 = stds[1][-1:]
 
 
-
+			#print(std3_0)
 			return stds,(std1_0,std2_0,std3_0)
 
 		def F2(x):
@@ -298,13 +299,18 @@ class Isotope(object):
 			self.HAUS1_raw_sd = np.std(val_temp[0])
 			self.HAUS2_raw_sd = np.std(val_temp[1])
 			self.TAP_raw_sd = np.std(val_temp[2])
-
-			SD = (self.HAUS1_raw_sd**(0.5)+self.HAUS2_raw_sd**(0.5)+self.TAP_raw_sd**(0.5))**(0.5)
-
+			#print(val_temp)          
+            
+			s1 = self.HAUS1_raw_sd
+			s2 = self.HAUS2_raw_sd
+			s3 = self.TAP_raw_sd
+            
+			SD = (self.HAUS1_raw_sd**2+self.HAUS2_raw_sd**2+self.TAP_raw_sd**2)**(0.5)
+			#print(SD)
 			return(SD)
 
-		bounds = [(0.5,1),(0.5,1),(0.5,1),(0.5,1),(0.8,1),
-		(0.8,1),(0.8,1),(0.9,1),(0.9,1),(0.999999,1)]
+		bounds = [(0,1),(0,1),(0,1),(0,1),(0,1),
+		(0,1),(0,1),(0,1),(0,1),(1,1)]
 
 		cons = ({'type':"ineq",
 			'fun': lambda x: np.array(x[1]-x[0])},
@@ -325,20 +331,20 @@ class Isotope(object):
 			{'type':"eq",
 			'fun': lambda x: np.array(x[9]-1)},
 			{'type':"ineq",
-			'fun': lambda x: np.array(x[0]-0.75)})
+			'fun': lambda x: np.array(x[0])})
 
 		x0= np.array([self.coeffs[i] for i in self.coeffs])
 
 		self.log.append("Running SQSLP algorithm")
-		xnew = minimize(F,x0 = x0,bounds = bounds,constraints = cons) # the main workhorse?
+		xnew = minimize(F,x0 = x0,bounds = bounds,constraints = cons, method = 'SLSQP',tol=1e-10, options={'maxiter': 1e10}) # the main workhorse?
 		self.log.append("Done")
 
 
 
 		local = dict([(i,j) for i,j in zip(range(1,len(xnew["x"])+1),xnew["x"])])
 		self.coeffs = local
-		self.combined_raw_sd = F2(x0)
-		self.combined_sd = F2(xnew["x"])
+		self.combined_raw_sd = F(x0)
+		self.combined_sd = F(xnew["x"])
 
 		def writeCoeffsfile(coeffs,iso = isotope):
 
@@ -588,9 +594,12 @@ class Isotope(object):
 			yvals = []
 			xvals = []
 
+			xvals_mean = []
+
 
 			for i,j in zip(xhaus1,yhaus1):
 				xvals.append(i)
+
 				yvals.append(j)
 			for i,j in zip(xhaus2,yhaus2):
 				xvals.append(i)
@@ -602,7 +611,6 @@ class Isotope(object):
 			slope, intercept, r_value, p_value, std_err = stats.linregress(xvals,yvals)
 
 			self.VSMOW_params = {'slope':slope,'intercept':intercept,"xvals":xvals,"yvals":yvals}
-
 
 		normToVSMOW(self.vsmow,isotope)
 
@@ -633,7 +641,7 @@ class Isotope(object):
 		ax.plot(params["xvals"],params["yvals"],'o',color = 'black',markerfacecolor='w')
 		ax.plot(xi,xi*params["slope"]+params["intercept"], color = 'black')
 
-		ax.text(posxy[0],posxy[1],"y {:.3f} = x {:+.3f}".format(params["slope"],params["intercept"]))
+		ax.text(posxy[0],posxy[1],"y {:.5f} = x {:+.5f}".format(params["slope"],params["intercept"]))
 		ax.grid()
 		ax.tick_params(direction='in',top=True,right=True)
 		plt.tight_layout()
