@@ -336,7 +336,7 @@ class Isotope(object):
 		x0= np.array([self.coeffs[i] for i in self.coeffs])
 
 		self.log.append("Running SQSLP algorithm")
-		xnew = minimize(F,x0 = x0,bounds = bounds,constraints = cons, method = 'SLSQP',tol=1e-10, options={'maxiter': 1e10}) # the main workhorse?
+		xnew = minimize(F,x0 = x0,bounds = bounds,constraints = cons, method = 'SLSQP',tol=1e-10, options={'maxiter': 1e6}) # the main workhorse?
 		self.log.append("Done")
 
 
