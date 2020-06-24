@@ -948,8 +948,8 @@ class Merged(object):
 
 	def setNickName(self):
 			self.nickname = str(input("""Please set the run's nickname:  \n
-			Suggested format: YYYY DD MM UserInitials RunName RunNumber \n
-			Example: 2000 01 01 CDG Paris Run01\n \n """))
+			Suggested format: YYYY MM DD UserInitials RunName RunNumber \n
+			Example: 2020 06 23 CDG Paris Run01\n \n """))
 
 
 	def suggestedReruns(self):
