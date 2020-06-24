@@ -336,7 +336,7 @@ class Isotope(object):
 		x0= np.array([self.coeffs[i] for i in self.coeffs])
 
 		self.log.append("Running SQSLP algorithm")
-		xnew = minimize(F,x0 = x0,bounds = bounds,constraints = cons, method = 'SLSQP',tol=1e-10, options={'maxiter': 1e10}) # the main workhorse?
+		xnew = minimize(F,x0 = x0,bounds = bounds,constraints = cons, method = 'SLSQP',tol=1e-10, options={'maxiter': 1e6}) # the main workhorse?
 		self.log.append("Done")
 
 
@@ -783,12 +783,11 @@ class Isotope(object):
 
 
 						ISO = dat.loc['Control'].iloc[j*4:(j+1)]
-
-						ISOmean = dat.loc["Control"].iloc[j*4:(j+1)*4-1][col1]
-						key = min(dat.loc["Control"].iloc[j*4:(j+1)*4-1]["key"])
-						ISOmem_corr = dat.loc["Control"].iloc[j*4:(j+1)*4-1][col2]
-						ISOdrift_corr = dat.loc["Control"].iloc[j*4:(j+1)*4-1][col3]
-						ISOvsmow_corr = dat.loc["Control"].iloc[j*4:(j+1)*4-1][col4]
+						ISOmean = dat.loc["Control"].iloc[j*4:(j+1)*4][col1]
+						key = min(dat.loc["Control"].iloc[j*4:(j+1)*4]["key"])
+						ISOmem_corr = dat.loc["Control"].iloc[j*4:(j+1)*4][col2]
+						ISOdrift_corr = dat.loc["Control"].iloc[j*4:(j+1)*4][col3]
+						ISOvsmow_corr = dat.loc["Control"].iloc[j*4:(j+1)*4][col4]
 						count,ISO,ISO_mem,ISO_drift,ISO_smow = ISOmean.count(),ISOmean.mean(),ISOmem_corr.mean(),ISOdrift_corr.mean(),ISOvsmow_corr.mean()
 						sd,sd_mem,sd_drift,sd_smow = ISOmean.std(),ISOmem_corr.std(),ISOdrift_corr.std(),ISOvsmow_corr.std()
 						val.append((key,i,"_Control {}".format(j+1),ISO,sd,ISO_mem,sd_mem,ISO_drift,sd_drift,ISO_smow,sd_smow,count,self.run_id))
@@ -970,7 +969,8 @@ class Merged(object):
 					result.append(g)
 
 			df["inside GMWL"] = result
-
+			df=df.where(df['Identifier 1'] != 'HAUS1').dropna()
+	
 			return df.where(df["inside GMWL"] == 'outside').dropna()
 
 
