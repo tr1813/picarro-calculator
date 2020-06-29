@@ -315,7 +315,11 @@ def writetoExcel(frun,path):
 	'raw data':frun.O18.raw}
 
 	for df in mydict:
-		mydict[df].to_excel(writer,df,float_format="%.2f")
+		try:
+			mydict[df].to_excel(writer,df,float_format="%.2f")
+		except:
+			if mydict[df].empty == True:
+				print("no samples to rerun")
 	frun.coeffs.to_excel(writer,'memory coefficients',float_format="%.4f")
 	writer.save()
 
