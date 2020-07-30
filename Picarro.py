@@ -62,17 +62,60 @@ class Isotope(object):
 
 		renamed = dict([(i,i.strip()) for i in df]) # strip white space from column names
 		df.rename(columns=renamed, inplace=True)	# and rename all headers of the dataFrame with new 'clean names'
-		df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
-		if len(df['Identifier 1'].values[0]) < 1:
+
+		print(df["Error Code"])
+		if 1001 in df["Error Code"].values:
+			#raise Exception("Error 1001  The dataframe contains at least one empty line Quitting...")
+			print("Error 1001  The dataframe contains at least one empty line Quitting...")
+			def getEmptyLines(df):
+				lines = df[df["Error Code"] == 1001].index.values
+				analyses = df[df["Error Code"] == 1001]["Analysis"]
+				
+				return lines, analyses
+
+			def getIdentifierNames(df):
+				lines, analyses = getEmptyLines(df)
+				ids1 = []
+				ids2 = []
+				for i in analyses.values:
+					#print(i)
+					ID1 = df.where(df["Analysis"] == i).dropna()["Identifier 1"].values[0]
+					ID2 = df.where(df["Analysis"] == i).dropna()["Identifier 2"].values[0]
+					
+					ids1.append(ID1)
+					ids2.append(ID2)
+				
+				return ids1,ids2
+
+			def resetID(df):
+				lines = getEmptyLines(df)[0]
+				
+				ids1,ids2 = getIdentifierNames(df)
+				
+				for l,id1,id2 in zip(lines,ids1,ids2):
+					#print(l)
+					df.loc[l,"Identifier 1"] = id1
+					df.loc[l,"Identifier 2"] = id2
+					df.loc[l,"H2O_Mean"] = 0
+
+				return df
+			
+			df = resetID(df)	
+
+		elif len(df['Identifier 1'].values[0]) < 1:
 			raise Exception('Sample description missing, load it manually')
+
+		df["Identifier 1"] = [i.strip() for i in df["Identifier 1"].values]
 		df["Identifier 2"] = [i.strip() for i in df["Identifier 2"].values]
+
 		df["Line"] = [int(i) for i in df["Line"]]
 		self.run_id = float(self.filename[-19:-11])
 
 		df["RUN_ID"] = self.run_id * np.ones(len(df))
 		df.set_index(["Identifier 1","Identifier 2","Inj Nr"], inplace=True)
 
-		self.raw = df
+		self.noempty = df
+
 	def DummyCheck(self):
 
 		if len(self.raw)>132:
@@ -82,7 +125,7 @@ class Isotope(object):
 	def checkEmpty(self):
 
 		df = self.raw.copy()
-		df = df.where(df["H2O_Mean"]!="              ").dropna()
+		df = df.where(df["H2O_Mean"]!="			  ").dropna()
 		df["H2O_Mean"] = pd.to_numeric(df["H2O_Mean"])
 		for i in df:
 			try:
@@ -90,7 +133,7 @@ class Isotope(object):
 			except:
 				print("Cannot convert column {} to numeric type".format(i))
 
-		self.noempty = df
+		#self.noempty = df
 
 		diff = len(self.raw) -len(self.noempty)
 		if diff != 0:  # checks a boolean array which evaluates to True if
@@ -299,12 +342,12 @@ class Isotope(object):
 			self.HAUS1_raw_sd = np.std(val_temp[0])
 			self.HAUS2_raw_sd = np.std(val_temp[1])
 			self.TAP_raw_sd = np.std(val_temp[2])
-			#print(val_temp)          
-            
+			#print(val_temp)		  
+			
 			s1 = self.HAUS1_raw_sd
 			s2 = self.HAUS2_raw_sd
 			s3 = self.TAP_raw_sd
-            
+			
 			SD = (self.HAUS1_raw_sd**2+self.HAUS2_raw_sd**2+self.TAP_raw_sd**2)**(0.5)
 			#print(SD)
 			return(SD)
@@ -393,7 +436,7 @@ class Isotope(object):
 			coeff_samples = []
 			index_diff = (df.values[34:]-1)%4
 			for i in index_diff:
-			    coeff_samples.append(coeffs[int(i)])
+				coeff_samples.append(coeffs[int(i)])
 			new_list =  coeff_conditioning + coeff_standards + coeff_samples
 			return previous,new_list
 
@@ -1049,6 +1092,7 @@ def RunFromDB(by=None,date=None,name=None,run_num=None,conn=None,iso="O"):
 		if len(df) >132:
 			raise Exception("The dataframe contains more than 132 lines. Please narrow down the search. Quitting...")
 
+
 	try:
 		DummyCheck2(run.raw)
 	except:
@@ -1220,16 +1264,16 @@ def OverviewDatatoCSV(IsoO,IsoH):
 def getRawData(conn,by,date=None,name=None,run=None):
 	if by == 'keyword':
 		statement = """SELECT r.'Analysis',r.'Line',r.'Identifier 1',r.'Identifier 2',r.'Inj Nr',
-	    	r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean',rlk.NickName
-	    	from rawrun r, runlookup rlk
-	    	WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
+			r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean',rlk.NickName
+			from rawrun r, runlookup rlk
+			WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
 		df = pd.read_sql_query(statement,conn)
 	else:
 		if by == 'date':
 			statement = """SELECT r.'Analysis',r.'Line',r.'Identifier 1',r.'Identifier 2',r.'Inj Nr',
-	    	r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean'
-	    	from rawrun r, runlookup rlk
-	    	WHERE (r.RUN_ID = {} and r.RUN_ID = rlk.RUN_ID);""".format(date)
+			r.'d(18_16)Mean',r.'d(D_H)Mean',r.'Good',r.'Ignore',r.'Error Code',r.'RUN_ID',r.'H2O_Mean'
+			from rawrun r, runlookup rlk
+			WHERE (r.RUN_ID = {} and r.RUN_ID = rlk.RUN_ID);""".format(date)
 			df = pd.read_sql_query(statement,conn)
 		else:
 			raise Exception("by= must be either date (format: yyyymmdd) or keyword")
@@ -1244,18 +1288,18 @@ def getRawData(conn,by,date=None,name=None,run=None):
 def getCorrectedFromDB(conn,by,date=None,name=None,run=None):
 	if by == 'keyword':
 		statement = """SELECT r.'key',r.'Identifier 1',r.'Identifier 2',r.'RUN_ID',r.'position',
-    	r.'d18O vsmow',r.'d18O stdev. vsmow',r.'d18O counts',
-    	r.'d2H vsmow',r.'d2H stdev. vsmow',r.'d2H counts',rlk.NickName
-    	from runs r, runlookup rlk
-    	WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
+		r.'d18O vsmow',r.'d18O stdev. vsmow',r.'d18O counts',
+		r.'d2H vsmow',r.'d2H stdev. vsmow',r.'d2H counts',rlk.NickName
+		from runs r, runlookup rlk
+		WHERE (rlk.NickName like '%{0}%{1}%' and r.RUN_ID = rlk.RUN_ID);""".format(name,run)
 		df = pd.read_sql_query(statement,conn)
 	else:
 		if by == 'date':
 			statement =  """SELECT r.'key',r.'Identifier 1',r.'Identifier 2',r.'RUN_ID',r.'position',
-    		r.'d18O vsmow',r.'d18O stdev. vsmow',r.'d18O counts',
-    		r.'d2H vsmow',r.'d2H stdev. vsmow',r.'d2H counts',rlk.NickName
-    		from runs r, runlookup rlk
-    		WHERE (r.RUN_ID = {} and r.RUN_ID = rlk.RUN_ID);""".format(date)
+			r.'d18O vsmow',r.'d18O stdev. vsmow',r.'d18O counts',
+			r.'d2H vsmow',r.'d2H stdev. vsmow',r.'d2H counts',rlk.NickName
+			from runs r, runlookup rlk
+			WHERE (r.RUN_ID = {} and r.RUN_ID = rlk.RUN_ID);""".format(date)
 			df = pd.read_sql_query(statement,conn)
 		else:
 			raise Exception("by= must be either date (format: yyyymmdd) or keyword")
