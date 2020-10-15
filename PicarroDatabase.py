@@ -408,7 +408,78 @@ def plotStandardagainstTime(standard, date,conn):
 
 	fig.suptitle("{} at date {}".format(standard,date))
 	plt.show()
+	
 
+def readFromDB(sample_from='',from_date='',to_date='',only_inside=False, good_stdev=False,save=False,good_count=False):
+	conn = CreateConnection('database\isotopes.db')
+	if sample_from != '':
+		statement = """
+				select  r.'Identifier 1',
+						r.'Identifier 2',
+						r.'d18O vsmow',
+						r.'d18O stdev. vsmow',
+						r.'d18O counts',
+						r.'d2H vsmow',
+						r.'d2H stdev. vsmow',        
+						r.'d2H counts',
+						r.'inside GMWL',
+						r.RUN_ID
+
+				from runs r
+
+				where 
+					(r.'Identifier 2' like '"""+ sample_from +"""');
+	"""
+
+	if from_date!='' and to_date!='' and sample_from =='':
+		statement = """
+				select  r.'Identifier 1',
+						r.'Identifier 2',
+						r.'d18O vsmow',
+						r.'d18O stdev. vsmow',
+						r.'d18O counts',
+						r.'d2H vsmow',
+						r.'d2H stdev. vsmow',        
+						r.'d2H counts',
+						r.'inside GMWL',
+						r.RUN_ID
+
+				from runs r
+
+				where 
+					(r.'RUN_ID' BETWEEN '"""+from_date+"""' AND '"""+to_date+"""');
+	"""
+	if from_date!='' and to_date!='' and sample_from !='':
+		statement = """
+				select  r.'Identifier 1',
+						r.'Identifier 2',
+						r.'d18O vsmow',
+						r.'d18O stdev. vsmow',
+						r.'d18O counts',
+						r.'d2H vsmow',
+						r.'d2H stdev. vsmow',        
+						r.'d2H counts',
+						r.'inside GMWL',
+						r.RUN_ID
+
+				from runs r
+
+				where 
+					(r.'RUN_ID' BETWEEN '"""+from_date+"""' AND '"""+to_date+"""' AND r.'Identifier 2' like '"""+ sample_from+"""');
+	"""
+
+	df = pd.read_sql_query(statement,conn)
+	df.columns = ['Sample_name','Sample_owner','d18O (VSMOW)','d18O stdev.','d18O counts','d2H (VSMOW)','d2H stdev.','d2H counts','GMWL_check','Run_Date']
+	if only_inside == True:
+		df = df.loc[df['GMWL_check']=='inside']
+	if good_stdev == True:
+		df = df.loc[(df['d18O stdev.']<=0.1)&(df['d2H stdev.']<=0.8)]
+	if good_count == True:
+		df = df.loc[(df['d18O counts']>=3)&(df['d2H counts']>=3)]
+	if save == True:
+		filename = input('Please give your output a filename')
+		df.to_csv(os.path.join(r'J:\c715\Picarro\Results\Python',filename+'.csv'))
+	return df
 
 ### In case the database is rebuilt, and the run look up table needs to be done again, uncomment the next bit of code.
 
