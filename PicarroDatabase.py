@@ -478,7 +478,7 @@ def readFromDB(sample_from='',from_date='',to_date='',only_inside=False, good_st
 		df = df.loc[(df['d18O counts']>=3)&(df['d2H counts']>=3)]
 	if save == True:
 		filename = input('Please give your output a filename')
-		df.to_csv(os.path.join(r'J:\c715\Picarro\Results\Python',filename+'.csv'))
+		df.to_csv(os.path.join('Results',filename+'.csv'))
 	return df
 
 ### In case the database is rebuilt, and the run look up table needs to be done again, uncomment the next bit of code.
