@@ -481,6 +481,42 @@ def readFromDB(sample_from='',from_date='',to_date='',only_inside=False, good_st
 		df.to_csv(os.path.join('Results',filename+'.csv'))
 	return df
 
+
+def getRerunsByDate(sample_from,from_date,to_date):
+	conn = CreateConnection('database\isotopes.db')
+	statement = """
+				select  r.'Identifier 1',
+						r.'Identifier 2',
+						r.'d18O vsmow',
+						r.'d18O stdev. vsmow',
+						r.'d18O counts',
+						r.'d2H vsmow',
+						r.'d2H stdev. vsmow',        
+						r.'d2H counts',
+						r.'inside GMWL',
+						r.RUN_ID
+
+				from runs r
+
+				where 
+					(r.'RUN_ID' BETWEEN '"""+from_date+"""' AND '"""+to_date+"""' AND r.'Identifier 2' like '"""+ sample_from+"""');
+	"""
+	df = pd.read_sql_query(statement,conn)
+
+	df.columns = ['Sample_name','Sample_owner','d18O (VSMOW)','d18O stdev.','d18O counts','d2H (VSMOW)','d2H stdev.','d2H counts','GMWL_check','Run_Date']
+
+	df_good = df.loc[(df['d18O stdev.']<=0.1) & (df['d2H stdev.']<=0.8) & (df['d18O counts']>=3) & (df['d2H counts']>=3) & (df['GMWL_check']=='inside')]
+
+	df_reruns = df.loc[(df['d18O stdev.']>0.1) | (df['d2H stdev.']>0.8) | (df['d18O counts']<3) | (df['d2H counts']<3) | (df['GMWL_check']=='outside')]
+
+	reruns_dict = {run_id:[rerun for rerun in df_reruns.loc[df_reruns.Run_Date == run_id]['Sample_name'] if rerun.replace('-WH','') not in [good.replace('-WH','') for good in df_good['Sample_name']]] for run_id in df_reruns['Run_Date']}
+
+	#reruns = [rerun for rerun in df_reruns['Sample_name'] if rerun.replace('-WH','') not in [good.replace('-WH','') for good in df_good['Sample_name']]]
+	for k,v in reruns_dict.items():
+		print('In run started ',k,' following samples still need to be rerun: ',v)
+	return 
+	
+
 ### In case the database is rebuilt, and the run look up table needs to be done again, uncomment the next bit of code.
 
 
